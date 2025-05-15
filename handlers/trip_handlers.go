@@ -1,0 +1,57 @@
+// handlers/trip_handlers.go
+package handlers
+
+import (
+	"net/http"
+
+	"github.com/fadhlanhapp/sharetab-backend/models"
+	"github.com/fadhlanhapp/sharetab-backend/services"
+
+	"github.com/gin-gonic/gin"
+)
+
+// CreateTrip handles the creation of a new trip
+func CreateTrip(c *gin.Context) {
+	var request models.CreateTripRequest
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	// Generate ID and code
+	tripID := services.GenerateID()
+	code := services.GenerateCode()
+
+	// Create trip
+	trip := models.NewTrip(tripID, code, request.Name, request.Participant)
+
+	// Store trip
+	services.StoreTrip(trip)
+
+	// Return response
+	response := models.CreateTripResponse{
+		TripID: tripID,
+		Code:   code,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// GetTripByCodeHandler handles retrieving a trip by its code
+func GetTripByCodeHandler(c *gin.Context) {
+	var request models.GetTripByCodeRequest
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	trip, err := services.GetTripByCode(request.Code)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, trip)
+}

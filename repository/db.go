@@ -19,7 +19,7 @@ func InitDB() error {
 	port := getEnvOrDefault("DB_PORT", "5432")
 	user := getEnvOrDefault("DB_USER", "postgres")
 	password := getEnvOrDefault("DB_PASSWORD", "postgres")
-	dbname := getEnvOrDefault("DB_NAME", "splitbill")
+	dbname := getEnvOrDefault("DB_NAME", "sharetab")
 
 	// Create connection string
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",

@@ -13,9 +13,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Fixed CalculateSingleBill handler to work with the actual request format
+// Simplified CalculateSingleBill handler focused only on calculating what each person owes
 func CalculateSingleBill(c *gin.Context) {
-	// Define the actual request structure that matches the frontend payload
+	// Parse the request exactly as sent by the frontend
 	var request struct {
 		Items         []models.Item `json:"items"`
 		Tax           float64       `json:"tax"`
@@ -30,52 +30,133 @@ func CalculateSingleBill(c *gin.Context) {
 		return
 	}
 
-	// Log the parsed request for debugging
-	log.Printf("Parsed request: items=%d, tax=%.2f, serviceCharge=%.2f, totalDiscount=%.2f",
-		len(request.Items), request.Tax, request.ServiceCharge, request.TotalDiscount)
-
 	// Extract all unique participants
 	participants := make(map[string]bool)
 	for _, item := range request.Items {
-		// Add the payer
-		if item.PaidBy != "" {
-			participants[item.PaidBy] = true
-		}
-
-		// Add all consumers
 		for _, consumer := range item.Consumers {
 			participants[consumer] = true
 		}
 	}
 
 	// Convert participants map to slice
-	var splitAmong []string
+	var allParticipants []string
 	for participant := range participants {
-		splitAmong = append(splitAmong, participant)
+		allParticipants = append(allParticipants, participant)
 	}
 
-	// Determine split type - just use "items" since that's what the payload indicates
-	splitType := "items"
+	log.Printf("Request: %d items, tax=%.2f, serviceCharge=%.2f, participants=%v",
+		len(request.Items), request.Tax, request.ServiceCharge, allParticipants)
 
-	// Log the extracted information
-	log.Printf("Extracted participants: %v, splitType: %s", splitAmong, splitType)
+	// Calculate how much each person owes
+	perPersonCharges := calculatePersonalCharges(
+		request.Items,
+		request.Tax,
+		request.ServiceCharge,
+		request.TotalDiscount,
+		allParticipants,
+	)
 
-	// Calculate the bill
-	result, err := CalculateBill(request.Items, request.Tax, request.ServiceCharge, request.TotalDiscount, splitType, splitAmong)
-	if err != nil {
-		log.Printf("Error calculating bill: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Calculate subtotal and total
+	subtotal := calculateSubtotal(request.Items)
+	total := subtotal + request.Tax + request.ServiceCharge - request.TotalDiscount
+
+	// Create result
+	result := &models.SingleBillCalculation{
+		Amount:           Round(total),
+		Subtotal:         Round(subtotal),
+		Tax:              Round(request.Tax),
+		ServiceCharge:    Round(request.ServiceCharge),
+		TotalDiscount:    Round(request.TotalDiscount),
+		PerPersonCharges: perPersonCharges,
 	}
 
-	// Log the result for debugging
-	log.Printf("Calculation result: Amount=%.2f, Subtotal=%.2f", result.Amount, result.Subtotal)
+	// Log the result
+	log.Printf("Calculation result: total=%.2f", result.Amount)
 	for person, amount := range result.PerPersonCharges {
-		log.Printf("  %s: %.2f", person, amount)
+		log.Printf("  %s owes: %.2f", person, amount)
 	}
 
-	// Return the result
 	c.JSON(http.StatusOK, result)
+}
+
+// calculatePersonalCharges determines how much each person owes for their portion of the bill
+func calculatePersonalCharges(
+	items []models.Item,
+	tax float64,
+	serviceCharge float64,
+	totalDiscount float64,
+	participants []string,
+) map[string]float64 {
+	// Initialize charges map
+	charges := make(map[string]float64)
+	for _, participant := range participants {
+		charges[participant] = 0
+	}
+
+	// Calculate each person's share of items
+	for _, item := range items {
+		// Calculate item price
+		itemAmount := item.UnitPrice*float64(item.Quantity) - item.ItemDiscount
+		itemAmount = Round(itemAmount)
+
+		// Divide equally among consumers
+		if len(item.Consumers) > 0 {
+			sharePerPerson := itemAmount / float64(len(item.Consumers))
+			sharePerPerson = Round(sharePerPerson)
+
+			for _, consumer := range item.Consumers {
+				charges[consumer] += sharePerPerson
+			}
+		}
+
+		var sharePerPersonLog float64
+		if len(item.Consumers) > 0 {
+			sharePerPersonLog = Round(itemAmount / float64(len(item.Consumers)))
+		} else {
+			sharePerPersonLog = 0
+		}
+
+		log.Printf("Item: %s, price=%.2f, consumers=%v, sharePerPerson=%.2f",
+			item.Description, itemAmount, item.Consumers, sharePerPersonLog)
+	}
+
+	// Calculate extras (tax, service charge, discount)
+	extraCharges := tax + serviceCharge - totalDiscount
+
+	if extraCharges != 0 && len(participants) > 0 {
+		// Divide extras equally among all participants
+		extraPerPerson := extraCharges / float64(len(participants))
+		extraPerPerson = Round(extraPerPerson)
+
+		log.Printf("Extras: total=%.2f, perPerson=%.2f", extraCharges, extraPerPerson)
+
+		// Add extra charges to each person
+		for _, person := range participants {
+			charges[person] += extraPerPerson
+		}
+	}
+
+	// Round all charges
+	for person, amount := range charges {
+		charges[person] = Round(amount)
+	}
+
+	return charges
+}
+
+// calculateSubtotal calculates the sum of all items
+func calculateSubtotal(items []models.Item) float64 {
+	var subtotal float64
+	for _, item := range items {
+		itemAmount := item.UnitPrice*float64(item.Quantity) - item.ItemDiscount
+		subtotal += itemAmount
+	}
+	return subtotal
+}
+
+// Round rounds a number to 2 decimal places
+func Round(num float64) float64 {
+	return math.Round(num*100) / 100
 }
 
 // Simplified CalculateBill function that works with the actual request format
@@ -200,11 +281,6 @@ func CalculateBill(items []models.Item, tax, serviceCharge, totalDiscount float6
 	}
 
 	return result, nil
-}
-
-// Helper function to round to 2 decimal places
-func Round(num float64) float64 {
-	return math.Round(num*100) / 100
 }
 
 // AddEqualExpense adds an equal-split expense

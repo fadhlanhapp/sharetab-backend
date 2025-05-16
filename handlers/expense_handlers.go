@@ -13,7 +13,140 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Simplified CalculateSingleBill handler focused only on calculating what each person owes
+// Updated CalculateSingleBill handler with detailed breakdown
+// Replace your current calculatePersonalCharges function with this
+
+func calculatePersonalCharges(
+	items []models.Item,
+	tax float64,
+	serviceCharge float64,
+	totalDiscount float64,
+	participants []string,
+) (map[string]float64, map[string]models.PersonChargeBreakdown) {
+	// Initialize charges map
+	charges := make(map[string]float64)
+	breakdown := make(map[string]models.PersonChargeBreakdown)
+
+	// Initialize each participant's breakdown
+	for _, participant := range participants {
+		charges[participant] = 0
+		breakdown[participant] = models.PersonChargeBreakdown{
+			Subtotal:      0,
+			Tax:           0,
+			ServiceCharge: 0,
+			Total:         0,
+		}
+	}
+
+	// Calculate each person's share of items (subtotal)
+	for _, item := range items {
+		// Calculate item price
+		itemAmount := item.UnitPrice*float64(item.Quantity) - item.ItemDiscount
+		itemAmount = Round(itemAmount)
+
+		// Divide equally among consumers
+		if len(item.Consumers) > 0 {
+			sharePerPerson := itemAmount / float64(len(item.Consumers))
+			sharePerPerson = Round(sharePerPerson)
+
+			for _, consumer := range item.Consumers {
+				// Add to participant's subtotal
+				breakdown[consumer] = models.PersonChargeBreakdown{
+					Subtotal:      breakdown[consumer].Subtotal + sharePerPerson,
+					Tax:           breakdown[consumer].Tax,
+					ServiceCharge: breakdown[consumer].ServiceCharge,
+					Total:         breakdown[consumer].Total + sharePerPerson,
+				}
+			}
+		}
+
+		// Calculate share per person for logging
+		var sharePerPersonLog float64
+		if len(item.Consumers) > 0 {
+			sharePerPersonLog = Round(itemAmount / float64(len(item.Consumers)))
+		} else {
+			sharePerPersonLog = 0
+		}
+
+		log.Printf("Item: %s, price=%.2f, consumers=%v, sharePerPerson=%.2f",
+			item.Description, itemAmount, item.Consumers, sharePerPersonLog)
+	}
+
+	// Calculate total subtotal for proportion calculation
+	var totalSubtotal float64
+	for _, person := range participants {
+		totalSubtotal += breakdown[person].Subtotal
+	}
+
+	// Calculate extras (tax, service charge, discount)
+	if totalSubtotal > 0 && len(participants) > 0 {
+		for _, person := range participants {
+			// Calculate proportional tax and service charge based on person's subtotal
+			proportion := breakdown[person].Subtotal / totalSubtotal
+			personTax := tax * proportion
+			personService := serviceCharge * proportion
+			personDiscount := totalDiscount * proportion
+
+			// Update breakdown with tax and service
+			breakdown[person] = models.PersonChargeBreakdown{
+				Subtotal:      breakdown[person].Subtotal,
+				Tax:           Round(personTax),
+				ServiceCharge: Round(personService),
+				Total:         Round(breakdown[person].Subtotal + personTax + personService - personDiscount),
+			}
+
+			// Update total charges for backward compatibility
+			charges[person] = breakdown[person].Total
+		}
+
+		log.Printf("Extras calculation: tax=%.2f, service=%.2f, discount=%.2f, totalSubtotal=%.2f",
+			tax, serviceCharge, totalDiscount, totalSubtotal)
+	} else if totalSubtotal == 0 && len(participants) > 0 {
+		// If subtotal is 0 but we have extras, divide them equally
+		extraCharges := tax + serviceCharge - totalDiscount
+		extraPerPerson := extraCharges / float64(len(participants))
+		extraPerPerson = Round(extraPerPerson)
+
+		for _, person := range participants {
+			// Divide tax and service equally
+			personTax := tax / float64(len(participants))
+			personService := serviceCharge / float64(len(participants))
+
+			// Update breakdown
+			breakdown[person] = models.PersonChargeBreakdown{
+				Subtotal:      0,
+				Tax:           Round(personTax),
+				ServiceCharge: Round(personService),
+				Total:         Round(extraPerPerson),
+			}
+
+			// Update total charges
+			charges[person] = extraPerPerson
+		}
+
+		log.Printf("Equal extras distribution: perPerson=%.2f", extraPerPerson)
+	}
+
+	// Round all values in the breakdown
+	for person := range breakdown {
+		breakdown[person] = models.PersonChargeBreakdown{
+			Subtotal:      Round(breakdown[person].Subtotal),
+			Tax:           Round(breakdown[person].Tax),
+			ServiceCharge: Round(breakdown[person].ServiceCharge),
+			Total:         Round(breakdown[person].Total),
+		}
+	}
+
+	// Log the breakdown
+	for person, bd := range breakdown {
+		log.Printf("Person %s breakdown: subtotal=%.2f, tax=%.2f, service=%.2f, total=%.2f",
+			person, bd.Subtotal, bd.Tax, bd.ServiceCharge, bd.Total)
+	}
+
+	return charges, breakdown
+}
+
+// Update your CalculateSingleBill handler to use the new breakdown
 func CalculateSingleBill(c *gin.Context) {
 	// Parse the request exactly as sent by the frontend
 	var request struct {
@@ -47,8 +180,8 @@ func CalculateSingleBill(c *gin.Context) {
 	log.Printf("Request: %d items, tax=%.2f, serviceCharge=%.2f, participants=%v",
 		len(request.Items), request.Tax, request.ServiceCharge, allParticipants)
 
-	// Calculate how much each person owes
-	perPersonCharges := calculatePersonalCharges(
+	// Calculate how much each person owes with detailed breakdown
+	perPersonCharges, perPersonBreakdown := calculatePersonalCharges(
 		request.Items,
 		request.Tax,
 		request.ServiceCharge,
@@ -62,12 +195,13 @@ func CalculateSingleBill(c *gin.Context) {
 
 	// Create result
 	result := &models.SingleBillCalculation{
-		Amount:           Round(total),
-		Subtotal:         Round(subtotal),
-		Tax:              Round(request.Tax),
-		ServiceCharge:    Round(request.ServiceCharge),
-		TotalDiscount:    Round(request.TotalDiscount),
-		PerPersonCharges: perPersonCharges,
+		Amount:             Round(total),
+		Subtotal:           Round(subtotal),
+		Tax:                Round(request.Tax),
+		ServiceCharge:      Round(request.ServiceCharge),
+		TotalDiscount:      Round(request.TotalDiscount),
+		PerPersonCharges:   perPersonCharges,
+		PerPersonBreakdown: perPersonBreakdown, // Add the breakdown to the result
 	}
 
 	// Log the result
@@ -77,71 +211,6 @@ func CalculateSingleBill(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
-}
-
-// calculatePersonalCharges determines how much each person owes for their portion of the bill
-func calculatePersonalCharges(
-	items []models.Item,
-	tax float64,
-	serviceCharge float64,
-	totalDiscount float64,
-	participants []string,
-) map[string]float64 {
-	// Initialize charges map
-	charges := make(map[string]float64)
-	for _, participant := range participants {
-		charges[participant] = 0
-	}
-
-	// Calculate each person's share of items
-	for _, item := range items {
-		// Calculate item price
-		itemAmount := item.UnitPrice*float64(item.Quantity) - item.ItemDiscount
-		itemAmount = Round(itemAmount)
-
-		// Divide equally among consumers
-		if len(item.Consumers) > 0 {
-			sharePerPerson := itemAmount / float64(len(item.Consumers))
-			sharePerPerson = Round(sharePerPerson)
-
-			for _, consumer := range item.Consumers {
-				charges[consumer] += sharePerPerson
-			}
-		}
-
-		var sharePerPersonLog float64
-		if len(item.Consumers) > 0 {
-			sharePerPersonLog = Round(itemAmount / float64(len(item.Consumers)))
-		} else {
-			sharePerPersonLog = 0
-		}
-
-		log.Printf("Item: %s, price=%.2f, consumers=%v, sharePerPerson=%.2f",
-			item.Description, itemAmount, item.Consumers, sharePerPersonLog)
-	}
-
-	// Calculate extras (tax, service charge, discount)
-	extraCharges := tax + serviceCharge - totalDiscount
-
-	if extraCharges != 0 && len(participants) > 0 {
-		// Divide extras equally among all participants
-		extraPerPerson := extraCharges / float64(len(participants))
-		extraPerPerson = Round(extraPerPerson)
-
-		log.Printf("Extras: total=%.2f, perPerson=%.2f", extraCharges, extraPerPerson)
-
-		// Add extra charges to each person
-		for _, person := range participants {
-			charges[person] += extraPerPerson
-		}
-	}
-
-	// Round all charges
-	for person, amount := range charges {
-		charges[person] = Round(amount)
-	}
-
-	return charges
 }
 
 // calculateSubtotal calculates the sum of all items

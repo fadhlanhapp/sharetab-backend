@@ -48,14 +48,23 @@ type Settlement struct {
 	Amount float64 `json:"amount"`
 }
 
+// PersonChargeBreakdown represents a detailed breakdown of a person's charges
+type PersonChargeBreakdown struct {
+	Subtotal      float64 `json:"subtotal"`
+	Tax           float64 `json:"tax"`
+	ServiceCharge float64 `json:"serviceCharge"`
+	Total         float64 `json:"total"`
+}
+
 // SingleBillCalculation represents the result of calculating a single bill
 type SingleBillCalculation struct {
-	Amount           float64            `json:"amount"`
-	Subtotal         float64            `json:"subtotal"`
-	Tax              float64            `json:"tax"`
-	ServiceCharge    float64            `json:"serviceCharge"`
-	TotalDiscount    float64            `json:"totalDiscount"`
-	PerPersonCharges map[string]float64 `json:"perPersonCharges"`
+	Amount             float64                          `json:"amount"`
+	Subtotal           float64                          `json:"subtotal"`
+	Tax                float64                          `json:"tax"`
+	ServiceCharge      float64                          `json:"serviceCharge"`
+	TotalDiscount      float64                          `json:"totalDiscount"`
+	PerPersonCharges   map[string]float64               `json:"perPersonCharges"`
+	PerPersonBreakdown map[string]PersonChargeBreakdown `json:"perPersonBreakdown"` // Added this field
 }
 
 // SettlementResult represents the result of calculating settlements

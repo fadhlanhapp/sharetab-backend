@@ -2,7 +2,9 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
+	"math"
 	"net/http"
 
 	"github.com/fadhlanhapp/sharetab-backend/models"
@@ -11,127 +13,198 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Updated CalculateSingleBill handler that handles both formats
+// Fixed CalculateSingleBill handler to work with the actual request format
 func CalculateSingleBill(c *gin.Context) {
-	// Create a variable to hold the raw request as a map
-	var rawRequest map[string]interface{}
+	// Define the actual request structure that matches the frontend payload
+	var request struct {
+		Items         []models.Item `json:"items"`
+		Tax           float64       `json:"tax"`
+		ServiceCharge float64       `json:"serviceCharge"`
+		TotalDiscount float64       `json:"totalDiscount"`
+	}
 
-	// First bind the raw request
-	if err := c.ShouldBindJSON(&rawRequest); err != nil {
+	// Parse the request
+	if err := c.ShouldBindJSON(&request); err != nil {
+		log.Printf("Error binding JSON: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
 
-	// Check if we have "splitAmong" in the request, which indicates an equal split
-	splitType := "items" // Default to items
-	var splitAmong []string
-	var items []models.Item
-	var subtotal float64
-	var tax float64
-	var serviceCharge float64
-	var totalDiscount float64
+	// Log the parsed request for debugging
+	log.Printf("Parsed request: items=%d, tax=%.2f, serviceCharge=%.2f, totalDiscount=%.2f",
+		len(request.Items), request.Tax, request.ServiceCharge, request.TotalDiscount)
 
-	// Log the raw request for debugging
-	log.Printf("Raw request: %+v", rawRequest)
-
-	// Check if this is an equal split request
-	if _, hasSplitAmong := rawRequest["splitAmong"]; hasSplitAmong {
-		splitType = "equal"
-
-		// Parse equal split request
-		var equalRequest struct {
-			Subtotal      float64  `json:"subtotal"`
-			Tax           float64  `json:"tax"`
-			ServiceCharge float64  `json:"serviceCharge"`
-			TotalDiscount float64  `json:"totalDiscount"`
-			PaidBy        string   `json:"paidBy"`
-			SplitAmong    []string `json:"splitAmong"`
+	// Extract all unique participants
+	participants := make(map[string]bool)
+	for _, item := range request.Items {
+		// Add the payer
+		if item.PaidBy != "" {
+			participants[item.PaidBy] = true
 		}
 
-		if err := c.ShouldBindJSON(&equalRequest); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid equal split request"})
-			return
+		// Add all consumers
+		for _, consumer := range item.Consumers {
+			participants[consumer] = true
 		}
-
-		// Extract values
-		subtotal = equalRequest.Subtotal
-		tax = equalRequest.Tax
-		serviceCharge = equalRequest.ServiceCharge
-		totalDiscount = equalRequest.TotalDiscount
-		splitAmong = equalRequest.SplitAmong
-
-		// Create a dummy item representing the full bill
-		paidBy := equalRequest.PaidBy
-		if paidBy == "" && len(splitAmong) > 0 {
-			paidBy = splitAmong[0]
-		}
-
-		items = []models.Item{
-			{
-				Description:  "Total Bill",
-				UnitPrice:    subtotal,
-				Quantity:     1,
-				ItemDiscount: 0,
-				PaidBy:       paidBy,
-				Consumers:    splitAmong,
-			},
-		}
-
-		log.Printf("Parsed equal split request: subtotal=%.2f, tax=%.2f, serviceCharge=%.2f, paidBy=%s, splitAmong=%v",
-			subtotal, tax, serviceCharge, paidBy, splitAmong)
-
-	} else {
-		// Parse itemized split request
-		var itemRequest struct {
-			Items         []models.Item `json:"items"`
-			Tax           float64       `json:"tax"`
-			ServiceCharge float64       `json:"serviceCharge"`
-			TotalDiscount float64       `json:"totalDiscount"`
-		}
-
-		if err := c.ShouldBindJSON(&itemRequest); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid itemized split request"})
-			return
-		}
-
-		// Extract values
-		items = itemRequest.Items
-		tax = itemRequest.Tax
-		serviceCharge = itemRequest.ServiceCharge
-		totalDiscount = itemRequest.TotalDiscount
-
-		// Collect all participants
-		participantsMap := make(map[string]bool)
-		for _, item := range items {
-			if item.PaidBy != "" {
-				participantsMap[item.PaidBy] = true
-			}
-			for _, consumer := range item.Consumers {
-				participantsMap[consumer] = true
-			}
-		}
-
-		// Convert participants map to slice
-		for participant := range participantsMap {
-			splitAmong = append(splitAmong, participant)
-		}
-
-		log.Printf("Parsed itemized split request: items=%d, tax=%.2f, serviceCharge=%.2f, participants=%v",
-			len(items), tax, serviceCharge, splitAmong)
 	}
 
-	// Now calculate the bill using our improved CalculateBill function
-	result, err := services.CalculateBill(items, tax, serviceCharge, totalDiscount, splitType, splitAmong)
+	// Convert participants map to slice
+	var splitAmong []string
+	for participant := range participants {
+		splitAmong = append(splitAmong, participant)
+	}
 
+	// Determine split type - just use "items" since that's what the payload indicates
+	splitType := "items"
+
+	// Log the extracted information
+	log.Printf("Extracted participants: %v, splitType: %s", splitAmong, splitType)
+
+	// Calculate the bill
+	result, err := CalculateBill(request.Items, request.Tax, request.ServiceCharge, request.TotalDiscount, splitType, splitAmong)
 	if err != nil {
+		log.Printf("Error calculating bill: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Log the result for debugging
-	log.Printf("Calculation result: %+v", result)
+	log.Printf("Calculation result: Amount=%.2f, Subtotal=%.2f", result.Amount, result.Subtotal)
+	for person, amount := range result.PerPersonCharges {
+		log.Printf("  %s: %.2f", person, amount)
+	}
 
+	// Return the result
 	c.JSON(http.StatusOK, result)
+}
+
+// Simplified CalculateBill function that works with the actual request format
+func CalculateBill(items []models.Item, tax, serviceCharge, totalDiscount float64, splitType string, splitAmong []string) (*models.SingleBillCalculation, error) {
+	// Calculate subtotal from items
+	var subtotal float64
+	perPersonCharges := make(map[string]float64)
+
+	// Initialize all participants with zero balance
+	for _, person := range splitAmong {
+		perPersonCharges[person] = 0
+	}
+
+	log.Printf("Processing %d items with split type: %s", len(items), splitType)
+
+	// Process each item
+	for i, item := range items {
+		if item.UnitPrice < 0 || item.Quantity <= 0 {
+			return nil, fmt.Errorf("invalid item price or quantity for item: %s", item.Description)
+		}
+
+		if item.PaidBy == "" || len(item.Consumers) == 0 {
+			return nil, fmt.Errorf("missing paidBy or consumers for item: %s", item.Description)
+		}
+
+		// Calculate item amount
+		itemAmount := item.UnitPrice*float64(item.Quantity) - item.ItemDiscount
+		itemAmount = Round(itemAmount)
+		subtotal += itemAmount
+
+		// The payer pays the full amount for this item
+		if _, exists := perPersonCharges[item.PaidBy]; !exists {
+			perPersonCharges[item.PaidBy] = 0
+		}
+		perPersonCharges[item.PaidBy] += itemAmount
+
+		// Each consumer owes their share of this item
+		sharePerPerson := itemAmount / float64(len(item.Consumers))
+		sharePerPerson = Round(sharePerPerson)
+
+		for _, consumer := range item.Consumers {
+			if _, exists := perPersonCharges[consumer]; !exists {
+				perPersonCharges[consumer] = 0
+			}
+			perPersonCharges[consumer] -= sharePerPerson
+		}
+
+		log.Printf("Item %d: %s, Amount=%.2f, PaidBy=%s, Consumers=%v, SharePerPerson=%.2f",
+			i, item.Description, itemAmount, item.PaidBy, item.Consumers, sharePerPerson)
+	}
+
+	// Round the subtotal
+	subtotal = Round(subtotal)
+
+	// Process tax, service charge, and discount
+	tax = Round(tax)
+	serviceCharge = Round(serviceCharge)
+	totalDiscount = Round(totalDiscount)
+
+	// Calculate total
+	totalAmount := subtotal + tax + serviceCharge - totalDiscount
+	totalAmount = Round(totalAmount)
+
+	// Process extras (tax, service, discount)
+	extraCharges := tax + serviceCharge - totalDiscount
+	if extraCharges != 0 && len(splitAmong) > 0 {
+		// Find the payer (person who paid the most items)
+		payerCounts := make(map[string]int)
+		for _, item := range items {
+			payerCounts[item.PaidBy]++
+		}
+
+		var payer string
+		maxCount := 0
+		for p, count := range payerCounts {
+			if count > maxCount {
+				maxCount = count
+				payer = p
+			}
+		}
+
+		// If we couldn't determine payer, use the first participant
+		if payer == "" {
+			payer = splitAmong[0]
+		}
+
+		// Add the extra charges to the payer
+		if _, exists := perPersonCharges[payer]; !exists {
+			perPersonCharges[payer] = 0
+		}
+		perPersonCharges[payer] += extraCharges
+
+		// Calculate per-person share of extras
+		extraPerPerson := extraCharges / float64(len(splitAmong))
+		extraPerPerson = Round(extraPerPerson)
+
+		// Subtract each person's share of extras
+		for _, person := range splitAmong {
+			if _, exists := perPersonCharges[person]; !exists {
+				perPersonCharges[person] = 0
+			}
+			perPersonCharges[person] -= extraPerPerson
+		}
+
+		log.Printf("Extra charges: Total=%.2f, PerPerson=%.2f, Payer=%s",
+			extraCharges, extraPerPerson, payer)
+	}
+
+	// Round all final balances
+	for person, amount := range perPersonCharges {
+		perPersonCharges[person] = Round(amount)
+	}
+
+	// Create result
+	result := &models.SingleBillCalculation{
+		Amount:           totalAmount,
+		Subtotal:         subtotal,
+		Tax:              tax,
+		ServiceCharge:    serviceCharge,
+		TotalDiscount:    totalDiscount,
+		PerPersonCharges: perPersonCharges,
+	}
+
+	return result, nil
+}
+
+// Helper function to round to 2 decimal places
+func Round(num float64) float64 {
+	return math.Round(num*100) / 100
 }
 
 // AddEqualExpense adds an equal-split expense

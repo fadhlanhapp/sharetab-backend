@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"math"
 
 	"github.com/fadhlanhapp/sharetab-backend/models"
@@ -35,86 +36,157 @@ func RemoveExpense(tripID string, expenseID string) (bool, error) {
 	return expenseRepo.RemoveExpense(tripID, expenseID)
 }
 
-// CalculateBill calculates a bill without saving it
-func CalculateBill(items []models.Item, tax, serviceCharge, totalDiscount float64) (*models.SingleBillCalculation, error) {
-	// Calculate subtotal and process items
+// Updated CalculateBill function to work with both formats
+func CalculateBill(items []models.Item, tax, serviceCharge, totalDiscount float64, splitType string, splitAmong []string) (*models.SingleBillCalculation, error) {
+	// Calculate subtotal from items
 	var subtotal float64
 	perPersonCharges := make(map[string]float64)
 
-	for i, item := range items {
-		if item.UnitPrice < 0 || item.Quantity <= 0 {
-			return nil, fmt.Errorf("Invalid item price or quantity")
+	// Initialize all participants with zero balance
+	for _, person := range splitAmong {
+		perPersonCharges[person] = 0
+	}
+
+	// Process based on split type
+	if splitType == "equal" {
+		// For equal split, we just need the total and divide it equally
+
+		// Calculate total from items (should be just one item for equal split)
+		for _, item := range items {
+			subtotal += item.UnitPrice*float64(item.Quantity) - item.ItemDiscount
 		}
 
-		if item.PaidBy == "" || len(item.Consumers) == 0 {
-			return nil, fmt.Errorf("Missing paidBy or consumers for item")
+		// Get the payer
+		var payer string
+		if len(items) > 0 && items[0].PaidBy != "" {
+			payer = items[0].PaidBy
+		} else if len(splitAmong) > 0 {
+			payer = splitAmong[0]
+		} else {
+			return nil, fmt.Errorf("no payer specified")
 		}
 
-		// Calculate item amount
-		itemAmount := item.UnitPrice*float64(item.Quantity) - item.ItemDiscount
-		itemAmount = Round(itemAmount)
-		items[i].Amount = itemAmount
-		subtotal += itemAmount
+		// The payer pays the full amount initially
+		perPersonCharges[payer] += subtotal
 
-		// Update per-person charges
-		// The payer pays the total amount
-		if _, exists := perPersonCharges[item.PaidBy]; !exists {
-			perPersonCharges[item.PaidBy] = 0
+		// Calculate equal share per person
+		numPeople := float64(len(splitAmong))
+		if numPeople == 0 {
+			return nil, fmt.Errorf("no participants to split bill")
 		}
-		perPersonCharges[item.PaidBy] += itemAmount
 
-		// Each consumer owes their share
-		sharePerPerson := itemAmount / float64(len(item.Consumers))
-		sharePerPerson = Round(sharePerPerson)
+		equalShare := subtotal / numPeople
+		equalShare = Round(equalShare)
 
-		for _, consumer := range item.Consumers {
-			if _, exists := perPersonCharges[consumer]; !exists {
-				perPersonCharges[consumer] = 0
+		// Each person (including payer) owes their equal share
+		for _, person := range splitAmong {
+			perPersonCharges[person] -= equalShare
+		}
+
+		// Debug output
+		log.Printf("Equal split calculation: subtotal=%.2f, people=%d, share=%.2f, payer=%s",
+			subtotal, int(numPeople), equalShare, payer)
+
+	} else {
+		// For itemized split, process each item separately
+		for i, item := range items {
+			if item.UnitPrice < 0 || item.Quantity <= 0 {
+				return nil, fmt.Errorf("invalid item price or quantity")
 			}
-			perPersonCharges[consumer] -= sharePerPerson
+
+			if item.PaidBy == "" || len(item.Consumers) == 0 {
+				return nil, fmt.Errorf("missing paidBy or consumers for item")
+			}
+
+			// Calculate item amount
+			itemAmount := item.UnitPrice*float64(item.Quantity) - item.ItemDiscount
+			itemAmount = Round(itemAmount)
+			items[i].Amount = itemAmount
+			subtotal += itemAmount
+
+			// The payer pays the full amount for this item
+			if _, exists := perPersonCharges[item.PaidBy]; !exists {
+				perPersonCharges[item.PaidBy] = 0
+			}
+			perPersonCharges[item.PaidBy] += itemAmount
+
+			// Each consumer owes their share of this item
+			sharePerPerson := itemAmount / float64(len(item.Consumers))
+			sharePerPerson = Round(sharePerPerson)
+
+			for _, consumer := range item.Consumers {
+				if _, exists := perPersonCharges[consumer]; !exists {
+					perPersonCharges[consumer] = 0
+				}
+				perPersonCharges[consumer] -= sharePerPerson
+			}
+
+			// Debug output for this item
+			log.Printf("Item %d calculation: description=%s, amount=%.2f, paidBy=%s, numConsumers=%d, sharePerPerson=%.2f",
+				i, item.Description, itemAmount, item.PaidBy, len(item.Consumers), sharePerPerson)
 		}
 	}
 
-	// Calculate final amount
+	// Round the subtotal
 	subtotal = Round(subtotal)
+
+	// Process tax, service charge, and discount
 	tax = Round(tax)
 	serviceCharge = Round(serviceCharge)
 	totalDiscount = Round(totalDiscount)
 
+	// Calculate total
 	totalAmount := subtotal + tax + serviceCharge - totalDiscount
 	totalAmount = Round(totalAmount)
 
-	// Adjust per-person charges for tax, service charge, and discount
-	// These are split evenly among all participants
+	// Process extras (tax, service, discount)
 	extraCharges := tax + serviceCharge - totalDiscount
-	participants := make(map[string]bool)
+	if extraCharges != 0 {
+		// Split extras evenly among all participants
+		extraPerPerson := extraCharges / float64(len(splitAmong))
+		extraPerPerson = Round(extraPerPerson)
 
-	for _, item := range items {
-		participants[item.PaidBy] = true
-		for _, consumer := range item.Consumers {
-			participants[consumer] = true
+		// Find the payer to add the total extra charges
+		var payer string
+		if len(items) > 0 && items[0].PaidBy != "" {
+			payer = items[0].PaidBy
+		} else if len(splitAmong) > 0 {
+			payer = splitAmong[0]
 		}
+
+		// Add the extra charges to the payer
+		if payer != "" {
+			if _, exists := perPersonCharges[payer]; !exists {
+				perPersonCharges[payer] = 0
+			}
+			perPersonCharges[payer] += extraCharges
+		}
+
+		// Subtract each person's share of extras
+		for _, person := range splitAmong {
+			if _, exists := perPersonCharges[person]; !exists {
+				perPersonCharges[person] = 0
+			}
+			perPersonCharges[person] -= extraPerPerson
+		}
+
+		// Debug output for extras
+		log.Printf("Extra charges calculation: total=%.2f, perPerson=%.2f, payer=%s",
+			extraCharges, extraPerPerson, payer)
 	}
 
-	extraChargePerPerson := extraCharges / float64(len(participants))
-	extraChargePerPerson = Round(extraChargePerPerson)
-
-	// Add extra charges to payer
-	var payer string
-	for _, item := range items {
-		payer = item.PaidBy
-		break
+	// Round all final balances
+	for person, amount := range perPersonCharges {
+		perPersonCharges[person] = Round(amount)
 	}
 
-	if payer != "" {
-		perPersonCharges[payer] += extraCharges
+	// Debug output for final balances
+	log.Printf("Final balances:")
+	for person, amount := range perPersonCharges {
+		log.Printf("- %s: %.2f", person, amount)
 	}
 
-	// Subtract per-person share from each participant
-	for participant := range participants {
-		perPersonCharges[participant] -= extraChargePerPerson
-	}
-
+	// Create result
 	result := &models.SingleBillCalculation{
 		Amount:           totalAmount,
 		Subtotal:         subtotal,

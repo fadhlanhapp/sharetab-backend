@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fadhlanhapp/sharetab-backend/models"
+	"github.com/fadhlanhapp/sharetab-backend/utils"
 )
 
 // ProcessReceiptWithClaude processes a receipt image using Claude API
@@ -137,7 +138,7 @@ func CreateExpenseFromReceipt(trip *models.Trip, receipt *models.ProcessedReceip
 	splitAmong, defaultConsumers []string, imagePath string) (*models.Expense, error) {
 
 	// Generate expense ID
-	expenseID := GenerateID()
+	expenseID := utils.GenerateID()
 
 	// Set expense description
 	expenseDescription := receipt.Merchant
@@ -146,8 +147,12 @@ func CreateExpenseFromReceipt(trip *models.Trip, receipt *models.ProcessedReceip
 	}
 
 	if splitType == "equal" {
+		// Normalize names
+		normalizedPaidBy := utils.NormalizeName(paidBy)
+		normalizedSplitAmong := utils.NormalizeNames(splitAmong)
+
 		// Add participants if they don't exist
-		for _, participant := range splitAmong {
+		for _, participant := range normalizedSplitAmong {
 			err := AddParticipant(trip.ID, participant)
 			if err != nil {
 				return nil, fmt.Errorf("failed to add participant %s: %v", participant, err)
@@ -160,14 +165,14 @@ func CreateExpenseFromReceipt(trip *models.Trip, receipt *models.ProcessedReceip
 			CreationTime:  time.Now().UnixMilli(),
 			TripID:        trip.ID,
 			Description:   expenseDescription,
-			Amount:        receipt.Total,
-			Subtotal:      receipt.Subtotal,
-			Tax:           receipt.Tax,
-			ServiceCharge: receipt.Service,
-			TotalDiscount: receipt.Discount,
-			PaidBy:        paidBy,
-			SplitType:     "equal",
-			SplitAmong:    splitAmong,
+			Amount:        utils.Round(receipt.Total),
+			Subtotal:      utils.Round(receipt.Subtotal),
+			Tax:           utils.Round(receipt.Tax),
+			ServiceCharge: utils.Round(receipt.Service),
+			TotalDiscount: utils.Round(receipt.Discount),
+			PaidBy:        normalizedPaidBy,
+			SplitType:     utils.SplitTypeEqual,
+			SplitAmong:    normalizedSplitAmong,
 			ReceiptImage:  imagePath,
 		}
 
@@ -179,20 +184,24 @@ func CreateExpenseFromReceipt(trip *models.Trip, receipt *models.ProcessedReceip
 
 		return expense, nil
 	} else {
+		// Normalize names
+		normalizedPaidBy := utils.NormalizeName(paidBy)
+		normalizedDefaultConsumers := utils.NormalizeNames(defaultConsumers)
+
 		// Create items-based expense
 		expenseItems := make([]models.Item, 0, len(receipt.Items))
 
 		for _, receiptItem := range receipt.Items {
-			item := ConvertReceiptItemToExpenseItem(receiptItem, paidBy, defaultConsumers)
+			item := ConvertReceiptItemToExpenseItem(receiptItem, normalizedPaidBy, normalizedDefaultConsumers)
 			expenseItems = append(expenseItems, item)
 
 			// Add participants
-			err := AddParticipant(trip.ID, paidBy)
+			err := AddParticipant(trip.ID, normalizedPaidBy)
 			if err != nil {
-				return nil, fmt.Errorf("failed to add participant %s: %v", paidBy, err)
+				return nil, fmt.Errorf("failed to add participant %s: %v", normalizedPaidBy, err)
 			}
 
-			for _, consumer := range defaultConsumers {
+			for _, consumer := range normalizedDefaultConsumers {
 				err := AddParticipant(trip.ID, consumer)
 				if err != nil {
 					return nil, fmt.Errorf("failed to add participant %s: %v", consumer, err)
@@ -205,13 +214,13 @@ func CreateExpenseFromReceipt(trip *models.Trip, receipt *models.ProcessedReceip
 			CreationTime:  time.Now().UnixMilli(),
 			TripID:        trip.ID,
 			Description:   expenseDescription,
-			Amount:        receipt.Total,
-			Subtotal:      receipt.Subtotal,
-			Tax:           receipt.Tax,
-			ServiceCharge: receipt.Service,
-			TotalDiscount: receipt.Discount,
-			PaidBy:        paidBy,
-			SplitType:     "items",
+			Amount:        utils.Round(receipt.Total),
+			Subtotal:      utils.Round(receipt.Subtotal),
+			Tax:           utils.Round(receipt.Tax),
+			ServiceCharge: utils.Round(receipt.Service),
+			TotalDiscount: utils.Round(receipt.Discount),
+			PaidBy:        normalizedPaidBy,
+			SplitType:     utils.SplitTypeItems,
 			Items:         expenseItems,
 			ReceiptImage:  imagePath,
 		}

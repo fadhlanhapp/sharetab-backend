@@ -299,6 +299,13 @@ func ProcessExpenseItems(tripID string, items []models.Item) (float64, string, e
 	return subtotal, paidBy, nil
 }
 
+// CalculateSettlements calculates settlements for a trip (legacy function for backward compatibility)
+func CalculateSettlements(tripID string) (*models.SettlementResult, error) {
+	expenseService := NewExpenseService()
+	settlementService := NewSettlementService(expenseService)
+	return settlementService.CalculateSettlements(tripID)
+}
+
 // ConvertReceiptItemToExpenseItem converts a receipt item to an expense item
 func ConvertReceiptItemToExpenseItem(receiptItem models.ReceiptItem, paidBy string, consumers []string) models.Item {
 	return models.Item{

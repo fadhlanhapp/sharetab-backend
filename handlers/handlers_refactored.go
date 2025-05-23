@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"net/http"
-
 	"github.com/fadhlanhapp/sharetab-backend/models"
 	"github.com/fadhlanhapp/sharetab-backend/services"
 	"github.com/fadhlanhapp/sharetab-backend/utils"

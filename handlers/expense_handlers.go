@@ -4,11 +4,11 @@ package handlers
 import (
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 
 	"github.com/fadhlanhapp/sharetab-backend/models"
 	"github.com/fadhlanhapp/sharetab-backend/services"
+	"github.com/fadhlanhapp/sharetab-backend/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -42,12 +42,12 @@ func calculatePersonalCharges(
 	for _, item := range items {
 		// Calculate item price
 		itemAmount := item.UnitPrice*float64(item.Quantity) - item.ItemDiscount
-		itemAmount = Round(itemAmount)
+		itemAmount = utils.Round(itemAmount)
 
 		// Divide equally among consumers
 		if len(item.Consumers) > 0 {
 			sharePerPerson := itemAmount / float64(len(item.Consumers))
-			sharePerPerson = Round(sharePerPerson)
+			sharePerPerson = utils.Round(sharePerPerson)
 
 			for _, consumer := range item.Consumers {
 				// Add to participant's subtotal
@@ -63,7 +63,7 @@ func calculatePersonalCharges(
 		// Calculate share per person for logging
 		var sharePerPersonLog float64
 		if len(item.Consumers) > 0 {
-			sharePerPersonLog = Round(itemAmount / float64(len(item.Consumers)))
+			sharePerPersonLog = utils.Round(itemAmount / float64(len(item.Consumers)))
 		} else {
 			sharePerPersonLog = 0
 		}
@@ -90,9 +90,9 @@ func calculatePersonalCharges(
 			// Update breakdown with tax and service
 			breakdown[person] = models.PersonChargeBreakdown{
 				Subtotal:      breakdown[person].Subtotal,
-				Tax:           Round(personTax),
-				ServiceCharge: Round(personService),
-				Total:         Round(breakdown[person].Subtotal + personTax + personService - personDiscount),
+				Tax:           utils.Round(personTax),
+				ServiceCharge: utils.Round(personService),
+				Total:         utils.Round(breakdown[person].Subtotal + personTax + personService - personDiscount),
 			}
 
 			// Update total charges for backward compatibility
@@ -105,7 +105,7 @@ func calculatePersonalCharges(
 		// If subtotal is 0 but we have extras, divide them equally
 		extraCharges := tax + serviceCharge - totalDiscount
 		extraPerPerson := extraCharges / float64(len(participants))
-		extraPerPerson = Round(extraPerPerson)
+		extraPerPerson = utils.Round(extraPerPerson)
 
 		for _, person := range participants {
 			// Divide tax and service equally
@@ -115,9 +115,9 @@ func calculatePersonalCharges(
 			// Update breakdown
 			breakdown[person] = models.PersonChargeBreakdown{
 				Subtotal:      0,
-				Tax:           Round(personTax),
-				ServiceCharge: Round(personService),
-				Total:         Round(extraPerPerson),
+				Tax:           utils.Round(personTax),
+				ServiceCharge: utils.Round(personService),
+				Total:         utils.Round(extraPerPerson),
 			}
 
 			// Update total charges
@@ -130,10 +130,10 @@ func calculatePersonalCharges(
 	// Round all values in the breakdown
 	for person := range breakdown {
 		breakdown[person] = models.PersonChargeBreakdown{
-			Subtotal:      Round(breakdown[person].Subtotal),
-			Tax:           Round(breakdown[person].Tax),
-			ServiceCharge: Round(breakdown[person].ServiceCharge),
-			Total:         Round(breakdown[person].Total),
+			Subtotal:      utils.Round(breakdown[person].Subtotal),
+			Tax:           utils.Round(breakdown[person].Tax),
+			ServiceCharge: utils.Round(breakdown[person].ServiceCharge),
+			Total:         utils.Round(breakdown[person].Total),
 		}
 	}
 
@@ -167,12 +167,12 @@ func CalculateSingleBill(c *gin.Context) {
 	participants := make(map[string]bool)
 	for i, item := range request.Items {
 		// Normalize names in the item
-		normalizedPaidBy := services.NormalizeName(item.PaidBy)
+		normalizedPaidBy := utils.NormalizeName(item.PaidBy)
 		request.Items[i].PaidBy = normalizedPaidBy
 		
 		normalizedConsumers := make([]string, len(item.Consumers))
 		for j, consumer := range item.Consumers {
-			normalizedName := services.NormalizeName(consumer)
+			normalizedName := utils.NormalizeName(consumer)
 			normalizedConsumers[j] = normalizedName
 			participants[normalizedName] = true
 		}
@@ -204,23 +204,23 @@ func CalculateSingleBill(c *gin.Context) {
 	// Format names for display in the result
 	formattedPerPersonCharges := make(map[string]float64)
 	for person, amount := range perPersonCharges {
-		formattedName := services.FormatNameForDisplay(person)
+		formattedName := utils.FormatNameForDisplay(person)
 		formattedPerPersonCharges[formattedName] = amount
 	}
 
 	formattedPerPersonBreakdown := make(map[string]models.PersonChargeBreakdown)
 	for person, breakdown := range perPersonBreakdown {
-		formattedName := services.FormatNameForDisplay(person)
+		formattedName := utils.FormatNameForDisplay(person)
 		formattedPerPersonBreakdown[formattedName] = breakdown
 	}
 
 	// Create result
 	result := &models.SingleBillCalculation{
-		Amount:             Round(total),
-		Subtotal:           Round(subtotal),
-		Tax:                Round(request.Tax),
-		ServiceCharge:      Round(request.ServiceCharge),
-		TotalDiscount:      Round(request.TotalDiscount),
+		Amount:             utils.Round(total),
+		Subtotal:           utils.Round(subtotal),
+		Tax:                utils.Round(request.Tax),
+		ServiceCharge:      utils.Round(request.ServiceCharge),
+		TotalDiscount:      utils.Round(request.TotalDiscount),
 		PerPersonCharges:   formattedPerPersonCharges,
 		PerPersonBreakdown: formattedPerPersonBreakdown,
 	}
@@ -245,9 +245,6 @@ func calculateSubtotal(items []models.Item) float64 {
 }
 
 // Round rounds a number to 2 decimal places
-func Round(num float64) float64 {
-	return math.Round(num*100) / 100
-}
 
 // Simplified CalculateBill function that works with the actual request format
 func CalculateBill(items []models.Item, tax, serviceCharge, totalDiscount float64, splitType string, splitAmong []string) (*models.SingleBillCalculation, error) {
@@ -274,7 +271,7 @@ func CalculateBill(items []models.Item, tax, serviceCharge, totalDiscount float6
 
 		// Calculate item amount
 		itemAmount := item.UnitPrice*float64(item.Quantity) - item.ItemDiscount
-		itemAmount = Round(itemAmount)
+		itemAmount = utils.Round(itemAmount)
 		subtotal += itemAmount
 
 		// The payer pays the full amount for this item
@@ -285,7 +282,7 @@ func CalculateBill(items []models.Item, tax, serviceCharge, totalDiscount float6
 
 		// Each consumer owes their share of this item
 		sharePerPerson := itemAmount / float64(len(item.Consumers))
-		sharePerPerson = Round(sharePerPerson)
+		sharePerPerson = utils.Round(sharePerPerson)
 
 		for _, consumer := range item.Consumers {
 			if _, exists := perPersonCharges[consumer]; !exists {
@@ -299,16 +296,16 @@ func CalculateBill(items []models.Item, tax, serviceCharge, totalDiscount float6
 	}
 
 	// Round the subtotal
-	subtotal = Round(subtotal)
+	subtotal = utils.Round(subtotal)
 
 	// Process tax, service charge, and discount
-	tax = Round(tax)
-	serviceCharge = Round(serviceCharge)
-	totalDiscount = Round(totalDiscount)
+	tax = utils.Round(tax)
+	serviceCharge = utils.Round(serviceCharge)
+	totalDiscount = utils.Round(totalDiscount)
 
 	// Calculate total
 	totalAmount := subtotal + tax + serviceCharge - totalDiscount
-	totalAmount = Round(totalAmount)
+	totalAmount = utils.Round(totalAmount)
 
 	// Process extras (tax, service, discount)
 	extraCharges := tax + serviceCharge - totalDiscount
@@ -341,7 +338,7 @@ func CalculateBill(items []models.Item, tax, serviceCharge, totalDiscount float6
 
 		// Calculate per-person share of extras
 		extraPerPerson := extraCharges / float64(len(splitAmong))
-		extraPerPerson = Round(extraPerPerson)
+		extraPerPerson = utils.Round(extraPerPerson)
 
 		// Subtract each person's share of extras
 		for _, person := range splitAmong {
@@ -357,7 +354,7 @@ func CalculateBill(items []models.Item, tax, serviceCharge, totalDiscount float6
 
 	// Round all final balances
 	for person, amount := range perPersonCharges {
-		perPersonCharges[person] = Round(amount)
+		perPersonCharges[person] = utils.Round(amount)
 	}
 
 	// Create result
@@ -392,7 +389,7 @@ func AddEqualExpense(c *gin.Context) {
 	// Normalize names and add participants
 	normalizedSplitAmong := make([]string, len(request.SplitAmong))
 	for i, participant := range request.SplitAmong {
-		normalizedName := services.NormalizeName(participant)
+		normalizedName := utils.NormalizeName(participant)
 		normalizedSplitAmong[i] = normalizedName
 		err := services.AddParticipant(trip.ID, normalizedName)
 		if err != nil {
@@ -402,7 +399,7 @@ func AddEqualExpense(c *gin.Context) {
 	}
 
 	// Create expense
-	expenseID := services.GenerateID()
+	expenseID := utils.GenerateID()
 
 	// Round all monetary values
 	subtotal := services.Round(request.Subtotal)
@@ -411,7 +408,7 @@ func AddEqualExpense(c *gin.Context) {
 	totalDiscount := services.Round(request.TotalDiscount)
 
 	// Normalize the payer name
-	normalizedPaidBy := services.NormalizeName(request.PaidBy)
+	normalizedPaidBy := utils.NormalizeName(request.PaidBy)
 
 	expense := models.NewEqualExpense(
 		expenseID,
@@ -465,7 +462,7 @@ func AddItemsExpense(c *gin.Context) {
 	totalDiscount := services.Round(request.TotalDiscount)
 
 	// Create expense
-	expenseID := services.GenerateID()
+	expenseID := utils.GenerateID()
 
 	expense := models.NewItemExpense(
 		expenseID,
@@ -547,12 +544,12 @@ func ListExpenses(c *gin.Context) {
 	formattedExpenses := make([]*models.Expense, len(tripExpenses))
 	for i, expense := range tripExpenses {
 		formattedExpense := *expense
-		formattedExpense.PaidBy = services.FormatNameForDisplay(expense.PaidBy)
+		formattedExpense.PaidBy = utils.FormatNameForDisplay(expense.PaidBy)
 		
 		if len(expense.SplitAmong) > 0 {
 			formattedSplitAmong := make([]string, len(expense.SplitAmong))
 			for j, participant := range expense.SplitAmong {
-				formattedSplitAmong[j] = services.FormatNameForDisplay(participant)
+				formattedSplitAmong[j] = utils.FormatNameForDisplay(participant)
 			}
 			formattedExpense.SplitAmong = formattedSplitAmong
 		}
@@ -561,11 +558,11 @@ func ListExpenses(c *gin.Context) {
 			formattedItems := make([]models.Item, len(expense.Items))
 			for j, item := range expense.Items {
 				formattedItem := item
-				formattedItem.PaidBy = services.FormatNameForDisplay(item.PaidBy)
+				formattedItem.PaidBy = utils.FormatNameForDisplay(item.PaidBy)
 				
 				formattedConsumers := make([]string, len(item.Consumers))
 				for k, consumer := range item.Consumers {
-					formattedConsumers[k] = services.FormatNameForDisplay(consumer)
+					formattedConsumers[k] = utils.FormatNameForDisplay(consumer)
 				}
 				formattedItem.Consumers = formattedConsumers
 				formattedItems[j] = formattedItem

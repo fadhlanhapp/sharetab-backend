@@ -6,6 +6,7 @@ import (
 
 	"github.com/fadhlanhapp/sharetab-backend/models"
 	"github.com/fadhlanhapp/sharetab-backend/services"
+	"github.com/fadhlanhapp/sharetab-backend/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,11 +21,11 @@ func CreateTrip(c *gin.Context) {
 	}
 
 	// Generate ID and code
-	tripID := services.GenerateID()
-	code := services.GenerateCode()
+	tripID := utils.GenerateID()
+	code := utils.GenerateCode()
 
 	// Create trip with normalized participant name
-	normalizedParticipant := services.NormalizeName(request.Participant)
+	normalizedParticipant := utils.NormalizeName(request.Participant)
 	trip := models.NewTrip(tripID, code, request.Name, normalizedParticipant)
 
 	// Store trip
@@ -63,7 +64,7 @@ func GetTripByCodeHandler(c *gin.Context) {
 	formattedTrip := *trip
 	formattedParticipants := make([]string, len(trip.Participants))
 	for i, participant := range trip.Participants {
-		formattedParticipants[i] = services.FormatNameForDisplay(participant)
+		formattedParticipants[i] = utils.FormatNameForDisplay(participant)
 	}
 	formattedTrip.Participants = formattedParticipants
 

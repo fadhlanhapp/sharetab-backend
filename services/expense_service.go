@@ -302,19 +302,11 @@ func processItemSplitExpense(expense *models.Expense, balances map[string]float6
 	// First, calculate the extra charges (tax, service, discount)
 	extraCharges := expense.Tax + expense.ServiceCharge - expense.TotalDiscount
 
-	// Identify all unique participants
-	participants := make(map[string]bool)
-	for _, item := range expense.Items {
-		participants[item.PaidBy] = true
-		for _, consumer := range item.Consumers {
-			participants[consumer] = true
-		}
-	}
+	// Calculate each person's share of items (for proportional extra charge distribution)
+	personItemTotals := make(map[string]float64)
+	var totalItemAmount float64
 
-	extraChargePerPerson := extraCharges / float64(len(participants))
-	extraChargePerPerson = Round(extraChargePerPerson)
-
-	// Process each item
+	// Process each item first
 	for _, item := range expense.Items {
 		// The payer pays for the item
 		if _, exists := balances[item.PaidBy]; !exists {
@@ -322,7 +314,7 @@ func processItemSplitExpense(expense *models.Expense, balances map[string]float6
 		}
 		balances[item.PaidBy] += item.Amount
 
-		// Each consumer owes their share
+		// Each consumer owes their share of this item
 		sharePerPerson := item.Amount / float64(len(item.Consumers))
 		sharePerPerson = Round(sharePerPerson)
 
@@ -331,11 +323,19 @@ func processItemSplitExpense(expense *models.Expense, balances map[string]float6
 				balances[consumer] = 0
 			}
 			balances[consumer] -= sharePerPerson
+			
+			// Track each person's total consumption for proportional extra charges
+			if _, exists := personItemTotals[consumer]; !exists {
+				personItemTotals[consumer] = 0
+			}
+			personItemTotals[consumer] += sharePerPerson
 		}
+		
+		totalItemAmount += item.Amount
 	}
 
 	// Handle extra charges (tax, service, discount) if any
-	if extraCharges != 0 {
+	if extraCharges != 0 && totalItemAmount > 0 {
 		// Find the person who paid for the most items to assign extra charges
 		payerCounts := make(map[string]float64)
 		for _, item := range expense.Items {
@@ -363,12 +363,16 @@ func processItemSplitExpense(expense *models.Expense, balances map[string]float6
 		}
 		balances[primaryPayer] += extraCharges
 
-		// Everyone (including primary payer) owes their fair share
-		for participant := range participants {
-			if _, exists := balances[participant]; !exists {
-				balances[participant] = 0
+		// Each person owes their proportional share of extra charges based on their item consumption
+		for person, itemTotal := range personItemTotals {
+			proportion := itemTotal / totalItemAmount
+			extraChargeShare := extraCharges * proportion
+			extraChargeShare = Round(extraChargeShare)
+			
+			if _, exists := balances[person]; !exists {
+				balances[person] = 0
 			}
-			balances[participant] -= extraChargePerPerson
+			balances[person] -= extraChargeShare
 		}
 	}
 }

@@ -1,13 +1,9 @@
-// services/trip_service.go (updated for database)
 package services
 
 import (
-	"math/rand"
-	"strings"
-	"time"
-
 	"github.com/fadhlanhapp/sharetab-backend/models"
 	"github.com/fadhlanhapp/sharetab-backend/repository"
+	"github.com/fadhlanhapp/sharetab-backend/utils"
 )
 
 var tripRepo *repository.TripRepository
@@ -17,54 +13,78 @@ func InitTripService() {
 	tripRepo = repository.NewTripRepository()
 }
 
-// GenerateID generates a random ID
-func GenerateID() string {
-	rand.Seed(time.Now().UnixNano())
-	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	const length = 20
-
-	result := make([]byte, length)
-	for i := range result {
-		result[i] = charset[rand.Intn(len(charset))]
-	}
-	return string(result)
+// TripService handles trip-related business logic
+type TripService struct {
+	repo *repository.TripRepository
 }
 
-// GenerateCode generates a random trip code
-func GenerateCode() string {
-	rand.Seed(time.Now().UnixNano())
-	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	const length = 6
-
-	result := make([]byte, length)
-	for i := range result {
-		result[i] = charset[rand.Intn(len(charset))]
+// NewTripService creates a new trip service instance
+func NewTripService() *TripService {
+	return &TripService{
+		repo: repository.NewTripRepository(),
 	}
-	return string(result)
 }
 
-// GetTripByCode retrieves a trip by its code
+// CreateTrip creates a new trip with validation
+func (s *TripService) CreateTrip(name, participant string) (*models.Trip, error) {
+	if err := utils.ValidateRequired(name, "trip name"); err != nil {
+		return nil, err
+	}
+	if err := utils.ValidateRequired(participant, "participant name"); err != nil {
+		return nil, err
+	}
+
+	tripID := utils.GenerateID()
+	code := utils.GenerateCode()
+	normalizedParticipant := utils.NormalizeName(participant)
+
+	trip := models.NewTrip(tripID, code, name, normalizedParticipant)
+	if err := s.repo.StoreTrip(trip); err != nil {
+		return nil, utils.NewInternalError("Failed to create trip")
+	}
+
+	return trip, nil
+}
+
+// GetTripByCode retrieves a trip by its code with formatted participant names
+func (s *TripService) GetTripByCode(code string) (*models.Trip, error) {
+	if err := utils.ValidateRequired(code, "trip code"); err != nil {
+		return nil, err
+	}
+
+	trip, err := s.repo.GetTripByCode(code)
+	if err != nil {
+		return nil, utils.NewNotFoundError("Trip")
+	}
+
+	// Format participant names for display
+	trip.Participants = utils.FormatNamesForDisplay(trip.Participants)
+	return trip, nil
+}
+
+// AddParticipant adds a participant to a trip if they don't exist already
+func (s *TripService) AddParticipant(tripID, participant string) error {
+	if err := utils.ValidateRequired(participant, "participant name"); err != nil {
+		return err
+	}
+
+	normalizedName := utils.NormalizeName(participant)
+	if err := s.repo.AddParticipant(tripID, normalizedName); err != nil {
+		return utils.NewInternalError("Failed to add participant")
+	}
+	return nil
+}
+
+// Legacy functions for backward compatibility
 func GetTripByCode(code string) (*models.Trip, error) {
 	return tripRepo.GetTripByCode(code)
 }
 
-// StoreTrip stores a trip
 func StoreTrip(trip *models.Trip) error {
 	return tripRepo.StoreTrip(trip)
 }
 
-// NormalizeName converts a name to lowercase for storage
-func NormalizeName(name string) string {
-	return strings.ToLower(strings.TrimSpace(name))
-}
-
-// FormatNameForDisplay converts a normalized name to title case for display
-func FormatNameForDisplay(name string) string {
-	return strings.Title(strings.ToLower(strings.TrimSpace(name)))
-}
-
-// AddParticipant adds a participant to a trip if they don't exist already
 func AddParticipant(tripID string, participant string) error {
-	normalizedName := NormalizeName(participant)
+	normalizedName := utils.NormalizeName(participant)
 	return tripRepo.AddParticipant(tripID, normalizedName)
 }

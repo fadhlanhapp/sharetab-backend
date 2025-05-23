@@ -1,4 +1,3 @@
-// routes/routes.go
 package routes
 
 import (
@@ -14,7 +13,26 @@ func SetupRoutes(router *gin.Engine) {
 	// Create uploads directory if not exists
 	os.MkdirAll("uploads", os.ModePerm)
 
-	// API routes
+	// Initialize refactored handlers
+	handlers.InitHandlers()
+
+	// API v1 routes (refactored)
+	v1 := router.Group("/api/v1")
+	{
+		// Trip endpoints
+		v1.POST("/trips/create", handlers.CreateTripRefactored)
+		v1.POST("/trips/getByCode", handlers.GetTripByCodeRefactored)
+
+		// Expense endpoints
+		v1.POST("/expenses/calculateSingleBill", handlers.CalculateSingleBillRefactored)
+		v1.POST("/expenses/addEqual", handlers.AddEqualExpenseRefactored)
+		v1.POST("/expenses/addItems", handlers.AddItemsExpenseRefactored)
+		v1.POST("/expenses/remove", handlers.RemoveExpenseRefactored)
+		v1.POST("/expenses/list", handlers.ListExpensesRefactored)
+		v1.POST("/expenses/calculateSettlements", handlers.CalculateSettlementsRefactored)
+	}
+
+	// Legacy API routes (for backward compatibility)
 	// Trip endpoints
 	router.POST("/trips/create", handlers.CreateTrip)
 	router.POST("/trips/getByCode", handlers.GetTripByCodeHandler)

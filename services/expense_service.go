@@ -334,18 +334,42 @@ func processItemSplitExpense(expense *models.Expense, balances map[string]float6
 		}
 	}
 
-	// Add extra charges to payer
-	if _, exists := balances[expense.PaidBy]; !exists {
-		balances[expense.PaidBy] = 0
-	}
-	balances[expense.PaidBy] += extraCharges
-
-	// Subtract per-person share from each participant
-	for participant := range participants {
-		if _, exists := balances[participant]; !exists {
-			balances[participant] = 0
+	// Handle extra charges (tax, service, discount) if any
+	if extraCharges != 0 {
+		// Find the person who paid for the most items to assign extra charges
+		payerCounts := make(map[string]float64)
+		for _, item := range expense.Items {
+			payerCounts[item.PaidBy] += item.Amount
 		}
-		balances[participant] -= extraChargePerPerson
+		
+		// Find the payer with the highest total
+		var primaryPayer string
+		var highestAmount float64
+		for payer, amount := range payerCounts {
+			if amount > highestAmount {
+				highestAmount = amount
+				primaryPayer = payer
+			}
+		}
+		
+		// If no primary payer found, use expense.PaidBy as fallback
+		if primaryPayer == "" {
+			primaryPayer = expense.PaidBy
+		}
+
+		// The primary payer gets credit for paying the full extra charges
+		if _, exists := balances[primaryPayer]; !exists {
+			balances[primaryPayer] = 0
+		}
+		balances[primaryPayer] += extraCharges
+
+		// Everyone (including primary payer) owes their fair share
+		for participant := range participants {
+			if _, exists := balances[participant]; !exists {
+				balances[participant] = 0
+			}
+			balances[participant] -= extraChargePerPerson
+		}
 	}
 }
 

@@ -364,6 +364,9 @@ func processItemSplitExpense(expense *models.Expense, balances map[string]float6
 		balances[primaryPayer] += extraCharges
 
 		// Each person owes their proportional share of extra charges based on their item consumption
+		var totalAllocated float64
+		var lastPerson string
+		
 		for person, itemTotal := range personItemTotals {
 			proportion := itemTotal / totalItemAmount
 			extraChargeShare := extraCharges * proportion
@@ -373,6 +376,14 @@ func processItemSplitExpense(expense *models.Expense, balances map[string]float6
 				balances[person] = 0
 			}
 			balances[person] -= extraChargeShare
+			totalAllocated += extraChargeShare
+			lastPerson = person
+		}
+		
+		// Handle rounding discrepancy by adjusting the last person
+		roundingDiff := Round(extraCharges - totalAllocated)
+		if roundingDiff != 0 && lastPerson != "" {
+			balances[lastPerson] -= roundingDiff
 		}
 	}
 }

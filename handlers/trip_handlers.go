@@ -23,8 +23,9 @@ func CreateTrip(c *gin.Context) {
 	tripID := services.GenerateID()
 	code := services.GenerateCode()
 
-	// Create trip
-	trip := models.NewTrip(tripID, code, request.Name, request.Participant)
+	// Create trip with normalized participant name
+	normalizedParticipant := services.NormalizeName(request.Participant)
+	trip := models.NewTrip(tripID, code, request.Name, normalizedParticipant)
 
 	// Store trip
 	services.StoreTrip(trip)
@@ -58,5 +59,13 @@ func GetTripByCodeHandler(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, trip)
+	// Format participant names for display
+	formattedTrip := *trip
+	formattedParticipants := make([]string, len(trip.Participants))
+	for i, participant := range trip.Participants {
+		formattedParticipants[i] = services.FormatNameForDisplay(participant)
+	}
+	formattedTrip.Participants = formattedParticipants
+
+	c.JSON(http.StatusOK, &formattedTrip)
 }

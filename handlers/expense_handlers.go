@@ -163,12 +163,20 @@ func CalculateSingleBill(c *gin.Context) {
 		return
 	}
 
-	// Extract all unique participants
+	// Normalize names in items and extract all unique participants
 	participants := make(map[string]bool)
-	for _, item := range request.Items {
-		for _, consumer := range item.Consumers {
-			participants[consumer] = true
+	for i, item := range request.Items {
+		// Normalize names in the item
+		normalizedPaidBy := services.NormalizeName(item.PaidBy)
+		request.Items[i].PaidBy = normalizedPaidBy
+		
+		normalizedConsumers := make([]string, len(item.Consumers))
+		for j, consumer := range item.Consumers {
+			normalizedName := services.NormalizeName(consumer)
+			normalizedConsumers[j] = normalizedName
+			participants[normalizedName] = true
 		}
+		request.Items[i].Consumers = normalizedConsumers
 	}
 
 	// Convert participants map to slice
@@ -193,6 +201,19 @@ func CalculateSingleBill(c *gin.Context) {
 	subtotal := calculateSubtotal(request.Items)
 	total := subtotal + request.Tax + request.ServiceCharge - request.TotalDiscount
 
+	// Format names for display in the result
+	formattedPerPersonCharges := make(map[string]float64)
+	for person, amount := range perPersonCharges {
+		formattedName := services.FormatNameForDisplay(person)
+		formattedPerPersonCharges[formattedName] = amount
+	}
+
+	formattedPerPersonBreakdown := make(map[string]models.PersonChargeBreakdown)
+	for person, breakdown := range perPersonBreakdown {
+		formattedName := services.FormatNameForDisplay(person)
+		formattedPerPersonBreakdown[formattedName] = breakdown
+	}
+
 	// Create result
 	result := &models.SingleBillCalculation{
 		Amount:             Round(total),
@@ -200,8 +221,8 @@ func CalculateSingleBill(c *gin.Context) {
 		Tax:                Round(request.Tax),
 		ServiceCharge:      Round(request.ServiceCharge),
 		TotalDiscount:      Round(request.TotalDiscount),
-		PerPersonCharges:   perPersonCharges,
-		PerPersonBreakdown: perPersonBreakdown, // Add the breakdown to the result
+		PerPersonCharges:   formattedPerPersonCharges,
+		PerPersonBreakdown: formattedPerPersonBreakdown,
 	}
 
 	// Log the result
@@ -368,9 +389,12 @@ func AddEqualExpense(c *gin.Context) {
 		return
 	}
 
-	// Add participants
-	for _, participant := range request.SplitAmong {
-		err := services.AddParticipant(trip.ID, participant)
+	// Normalize names and add participants
+	normalizedSplitAmong := make([]string, len(request.SplitAmong))
+	for i, participant := range request.SplitAmong {
+		normalizedName := services.NormalizeName(participant)
+		normalizedSplitAmong[i] = normalizedName
+		err := services.AddParticipant(trip.ID, normalizedName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add participant: " + err.Error()})
 			return
@@ -386,6 +410,9 @@ func AddEqualExpense(c *gin.Context) {
 	serviceCharge := services.Round(request.ServiceCharge)
 	totalDiscount := services.Round(request.TotalDiscount)
 
+	// Normalize the payer name
+	normalizedPaidBy := services.NormalizeName(request.PaidBy)
+
 	expense := models.NewEqualExpense(
 		expenseID,
 		trip.ID,
@@ -394,8 +421,8 @@ func AddEqualExpense(c *gin.Context) {
 		tax,
 		serviceCharge,
 		totalDiscount,
-		request.PaidBy,
-		request.SplitAmong,
+		normalizedPaidBy,
+		normalizedSplitAmong,
 	)
 
 	// Store expense
@@ -516,7 +543,40 @@ func ListExpenses(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, tripExpenses)
+	// Format names for display in expenses
+	formattedExpenses := make([]*models.Expense, len(tripExpenses))
+	for i, expense := range tripExpenses {
+		formattedExpense := *expense
+		formattedExpense.PaidBy = services.FormatNameForDisplay(expense.PaidBy)
+		
+		if len(expense.SplitAmong) > 0 {
+			formattedSplitAmong := make([]string, len(expense.SplitAmong))
+			for j, participant := range expense.SplitAmong {
+				formattedSplitAmong[j] = services.FormatNameForDisplay(participant)
+			}
+			formattedExpense.SplitAmong = formattedSplitAmong
+		}
+		
+		if len(expense.Items) > 0 {
+			formattedItems := make([]models.Item, len(expense.Items))
+			for j, item := range expense.Items {
+				formattedItem := item
+				formattedItem.PaidBy = services.FormatNameForDisplay(item.PaidBy)
+				
+				formattedConsumers := make([]string, len(item.Consumers))
+				for k, consumer := range item.Consumers {
+					formattedConsumers[k] = services.FormatNameForDisplay(consumer)
+				}
+				formattedItem.Consumers = formattedConsumers
+				formattedItems[j] = formattedItem
+			}
+			formattedExpense.Items = formattedItems
+		}
+		
+		formattedExpenses[i] = &formattedExpense
+	}
+
+	c.JSON(http.StatusOK, formattedExpenses)
 }
 
 // CalculateSettlements calculates settlements for a trip

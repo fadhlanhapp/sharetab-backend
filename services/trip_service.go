@@ -3,6 +3,7 @@ package services
 
 import (
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/fadhlanhapp/sharetab-backend/models"
@@ -52,7 +53,18 @@ func StoreTrip(trip *models.Trip) error {
 	return tripRepo.StoreTrip(trip)
 }
 
+// NormalizeName converts a name to lowercase for storage
+func NormalizeName(name string) string {
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
+// FormatNameForDisplay converts a normalized name to title case for display
+func FormatNameForDisplay(name string) string {
+	return strings.Title(strings.ToLower(strings.TrimSpace(name)))
+}
+
 // AddParticipant adds a participant to a trip if they don't exist already
 func AddParticipant(tripID string, participant string) error {
-	return tripRepo.AddParticipant(tripID, participant)
+	normalizedName := NormalizeName(participant)
+	return tripRepo.AddParticipant(tripID, normalizedName)
 }

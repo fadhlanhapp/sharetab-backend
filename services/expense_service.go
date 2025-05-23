@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 
 	"github.com/fadhlanhapp/sharetab-backend/models"
 	"github.com/fadhlanhapp/sharetab-backend/repository"
@@ -214,9 +215,19 @@ func ProcessExpenseItems(tripID string, items []models.Item) (float64, string, e
 			return 0, "", fmt.Errorf("Missing paidBy or consumers for item")
 		}
 
+		// Normalize names in the item
+		normalizedPaidBy := strings.ToLower(strings.TrimSpace(item.PaidBy))
+		items[i].PaidBy = normalizedPaidBy
+		
+		normalizedConsumers := make([]string, len(item.Consumers))
+		for j, consumer := range item.Consumers {
+			normalizedConsumers[j] = strings.ToLower(strings.TrimSpace(consumer))
+		}
+		items[i].Consumers = normalizedConsumers
+
 		// Set paidBy if not set yet
 		if paidBy == "" {
-			paidBy = item.PaidBy
+			paidBy = normalizedPaidBy
 		}
 
 		// Calculate item amount
@@ -225,11 +236,11 @@ func ProcessExpenseItems(tripID string, items []models.Item) (float64, string, e
 		items[i].Amount = itemAmount
 		subtotal += itemAmount
 
-		// Add participants if they don't exist
-		AddParticipant(tripID, item.PaidBy)
-		participants[item.PaidBy] = true
+		// Add participants if they don't exist (already normalized)
+		AddParticipant(tripID, normalizedPaidBy)
+		participants[normalizedPaidBy] = true
 
-		for _, consumer := range item.Consumers {
+		for _, consumer := range normalizedConsumers {
 			AddParticipant(tripID, consumer)
 			participants[consumer] = true
 		}
@@ -271,9 +282,25 @@ func CalculateSettlements(tripID string) (*models.SettlementResult, error) {
 	// Calculate settlements
 	settlements := calculateOptimalSettlements(balances)
 
+	// Format names for display in the result
+	formattedBalances := make(map[string]float64)
+	for person, balance := range balances {
+		formattedName := strings.Title(strings.ToLower(strings.TrimSpace(person)))
+		formattedBalances[formattedName] = balance
+	}
+
+	formattedSettlements := make([]models.Settlement, len(settlements))
+	for i, settlement := range settlements {
+		formattedSettlements[i] = models.Settlement{
+			From:   strings.Title(strings.ToLower(strings.TrimSpace(settlement.From))),
+			To:     strings.Title(strings.ToLower(strings.TrimSpace(settlement.To))),
+			Amount: settlement.Amount,
+		}
+	}
+
 	return &models.SettlementResult{
-		Settlements:        settlements,
-		IndividualBalances: balances,
+		Settlements:        formattedSettlements,
+		IndividualBalances: formattedBalances,
 	}, nil
 }
 

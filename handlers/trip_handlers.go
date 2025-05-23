@@ -47,6 +47,11 @@ func GetTripByCodeHandler(c *gin.Context) {
 		return
 	}
 
+	if request.Code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Code is required"})
+		return
+	}
+
 	trip, err := services.GetTripByCode(request.Code)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})

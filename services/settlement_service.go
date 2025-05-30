@@ -8,12 +8,14 @@ import (
 // SettlementService handles settlement calculation logic
 type SettlementService struct {
 	expenseService *ExpenseService
+	paymentService *PaymentService
 }
 
 // NewSettlementService creates a new settlement service
-func NewSettlementService(expenseService *ExpenseService) *SettlementService {
+func NewSettlementService(expenseService *ExpenseService, paymentService *PaymentService) *SettlementService {
 	return &SettlementService{
 		expenseService: expenseService,
+		paymentService: paymentService,
 	}
 }
 
@@ -31,8 +33,15 @@ func (s *SettlementService) CalculateSettlements(tripID string) (*models.Settlem
 		}, nil
 	}
 
-	// Calculate balances
+	// Calculate balances from expenses
 	balances := s.calculateBalances(tripExpenses)
+
+	// Apply payments to balances if payment service is available
+	if s.paymentService != nil {
+		// For now, we'll skip payment integration in settlement calculation
+		// This can be implemented when we have the proper trip code available
+		// TODO: Pass trip code to settlement calculation or modify the flow
+	}
 
 	// Calculate settlements
 	settlements := s.calculateOptimalSettlements(balances)

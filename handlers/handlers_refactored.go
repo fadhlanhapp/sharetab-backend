@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"fmt"
+	
 	"github.com/fadhlanhapp/sharetab-backend/models"
 	"github.com/fadhlanhapp/sharetab-backend/services"
+	"github.com/fadhlanhapp/sharetab-backend/repository"
 	"github.com/fadhlanhapp/sharetab-backend/utils"
 
 	"github.com/gin-gonic/gin"
@@ -14,16 +17,25 @@ type HandlerServices struct {
 	ExpenseService    *services.ExpenseService
 	CalculationService *services.CalculationService
 	SettlementService *services.SettlementService
+	PaymentService    *services.PaymentService
 }
 
 // NewHandlerServices creates a new handler services instance
 func NewHandlerServices() *HandlerServices {
 	expenseService := services.NewExpenseService()
+	tripService := services.NewTripService()
+	
+	// Initialize repositories and services for payments
+	paymentRepo := repository.NewPaymentRepository(repository.GetDB())
+	tripRepo := repository.NewTripRepository()
+	paymentService := services.NewPaymentService(paymentRepo, tripRepo)
+	
 	return &HandlerServices{
-		TripService:       services.NewTripService(),
+		TripService:       tripService,
 		ExpenseService:    expenseService,
 		CalculationService: services.NewCalculationService(),
-		SettlementService: services.NewSettlementService(expenseService),
+		SettlementService: services.NewSettlementService(expenseService, paymentService),
+		PaymentService:    paymentService,
 	}
 }
 
@@ -260,4 +272,62 @@ func CalculateSettlementsRefactored(c *gin.Context) {
 	}
 
 	utils.HandleSuccess(c, result)
+}
+
+// Payment handler functions
+func CreatePaymentHandler(c *gin.Context) {
+	var req models.PaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.HandleError(c, utils.NewBadRequestError(err.Error()))
+		return
+	}
+
+	payment, err := handlerServices.PaymentService.CreatePayment(&req)
+	if err != nil {
+		utils.HandleError(c, utils.NewBadRequestError(err.Error()))
+		return
+	}
+
+	utils.HandleSuccess(c, payment)
+}
+
+func GetPaymentsByTripHandler(c *gin.Context) {
+	var req struct {
+		Code string `json:"code" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.HandleError(c, utils.NewBadRequestError(err.Error()))
+		return
+	}
+
+	payments, err := handlerServices.PaymentService.GetPaymentsByTripCode(req.Code)
+	if err != nil {
+		utils.HandleError(c, utils.NewNotFoundError(err.Error()))
+		return
+	}
+
+	utils.HandleSuccess(c, payments)
+}
+
+func DeletePaymentHandler(c *gin.Context) {
+	paymentID := c.Param("id")
+	if paymentID == "" {
+		utils.HandleError(c, utils.NewBadRequestError("Payment ID is required"))
+		return
+	}
+
+	// Convert to int
+	id := 0
+	if _, err := fmt.Sscanf(paymentID, "%d", &id); err != nil {
+		utils.HandleError(c, utils.NewBadRequestError("Invalid payment ID"))
+		return
+	}
+
+	err := handlerServices.PaymentService.DeletePayment(id)
+	if err != nil {
+		utils.HandleError(c, utils.NewNotFoundError(err.Error()))
+		return
+	}
+
+	utils.HandleSuccess(c, gin.H{"message": "Payment deleted successfully"})
 }

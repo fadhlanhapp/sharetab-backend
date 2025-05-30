@@ -30,6 +30,11 @@ func SetupRoutes(router *gin.Engine) {
 		v1.POST("/expenses/remove", handlers.RemoveExpenseRefactored)
 		v1.POST("/expenses/list", handlers.ListExpensesRefactored)
 		v1.POST("/expenses/calculateSettlements", handlers.CalculateSettlementsRefactored)
+
+		// Payment endpoints
+		v1.POST("/payments/create", handlers.CreatePaymentHandler)
+		v1.POST("/payments/getByTrip", handlers.GetPaymentsByTripHandler)
+		v1.DELETE("/payments/:id", handlers.DeletePaymentHandler)
 	}
 
 	// Legacy API routes (for backward compatibility)

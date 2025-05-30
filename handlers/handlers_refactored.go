@@ -278,17 +278,28 @@ func CalculateSettlementsRefactored(c *gin.Context) {
 func CreatePaymentHandler(c *gin.Context) {
 	var req models.PaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.HandleError(c, utils.NewBadRequestError(err.Error()))
+		fmt.Printf("Payment binding error: %v\n", err)
+		c.JSON(400, gin.H{"error": "Invalid request format: " + err.Error()})
+		return
+	}
+
+	fmt.Printf("Payment request received: %+v\n", req)
+
+	// Check if payment service is properly initialized
+	if handlerServices.PaymentService == nil {
+		c.JSON(500, gin.H{"error": "Payment service not initialized"})
 		return
 	}
 
 	payment, err := handlerServices.PaymentService.CreatePayment(&req)
 	if err != nil {
-		utils.HandleError(c, utils.NewBadRequestError(err.Error()))
+		fmt.Printf("Payment service error: %v\n", err)
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	utils.HandleSuccess(c, payment)
+	fmt.Printf("Payment created successfully: %+v\n", payment)
+	c.JSON(201, payment)
 }
 
 func GetPaymentsByTripHandler(c *gin.Context) {

@@ -41,7 +41,7 @@ func (s *PaymentService) CreatePayment(req *models.PaymentRequest) (*models.Paym
 	// Get trip by code
 	trip, err := s.tripRepo.GetTripByCode(req.Code)
 	if err != nil {
-		return nil, errors.New("trip not found")
+		return nil, errors.New("trip not found: " + err.Error())
 	}
 
 	// Create payment

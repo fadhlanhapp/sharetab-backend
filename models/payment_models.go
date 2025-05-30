@@ -21,6 +21,6 @@ type PaymentRequest struct {
 	Code        string  `json:"code" binding:"required"`
 	FromPerson  string  `json:"from_person" binding:"required"`
 	ToPerson    string  `json:"to_person" binding:"required"`
-	Amount      float64 `json:"amount" binding:"required,gt=0"`
+	Amount      float64 `json:"amount" binding:"required"`
 	Description string  `json:"description"`
 }

@@ -64,9 +64,24 @@ CREATE TABLE item_consumers (
     PRIMARY KEY (item_id, consumer)
 );
 
+-- Create payments table
+CREATE TABLE payments (
+    id SERIAL PRIMARY KEY,
+    trip_id VARCHAR(36) NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    from_person VARCHAR(255) NOT NULL,
+    to_person VARCHAR(255) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    description TEXT,
+    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes for faster queries
 CREATE INDEX idx_trips_code ON trips(code);
 CREATE INDEX idx_expenses_trip_id ON expenses(trip_id);
 CREATE INDEX idx_expense_participants_expense_id ON expense_participants(expense_id);
 CREATE INDEX idx_expenses_items_expense_id ON expenses_items(expense_id);
 CREATE INDEX idx_item_consumers_item_id ON item_consumers(item_id);
+CREATE INDEX idx_payments_trip_id ON payments(trip_id);
+CREATE INDEX idx_payments_from_person ON payments(from_person);
+CREATE INDEX idx_payments_to_person ON payments(to_person);

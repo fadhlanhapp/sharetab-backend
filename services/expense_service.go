@@ -302,7 +302,13 @@ func ProcessExpenseItems(tripID string, items []models.Item) (float64, string, e
 // CalculateSettlements calculates settlements for a trip (legacy function for backward compatibility)
 func CalculateSettlements(tripID string) (*models.SettlementResult, error) {
 	expenseService := NewExpenseService()
-	settlementService := NewSettlementService(expenseService, nil) // No payment service for legacy
+	
+	// Create payment service with repositories
+	paymentRepo := repository.NewPaymentRepository(repository.GetDB())
+	tripRepo := repository.NewTripRepository()
+	paymentService := NewPaymentService(paymentRepo, tripRepo)
+	
+	settlementService := NewSettlementService(expenseService, paymentService)
 	return settlementService.CalculateSettlements(tripID)
 }
 

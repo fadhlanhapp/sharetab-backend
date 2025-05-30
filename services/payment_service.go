@@ -74,6 +74,11 @@ func (s *PaymentService) GetPaymentsByTripCode(code string) ([]models.Payment, e
 	return s.paymentRepo.GetPaymentsByTripID(trip.ID)
 }
 
+// GetPaymentsByTripID retrieves all payments for a trip by ID
+func (s *PaymentService) GetPaymentsByTripID(tripID string) ([]models.Payment, error) {
+	return s.paymentRepo.GetPaymentsByTripID(tripID)
+}
+
 // DeletePayment deletes a payment by ID
 func (s *PaymentService) DeletePayment(paymentID int) error {
 	// Check if payment exists

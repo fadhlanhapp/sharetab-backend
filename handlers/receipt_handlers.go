@@ -16,8 +16,18 @@ import (
 	"github.com/google/uuid"
 )
 
-// HandleProcessReceipt processes a receipt image using Claude
+// HandleProcessReceiptV1 processes a receipt image using Claude (v1 API)
+func HandleProcessReceiptV1(c *gin.Context) {
+	handleProcessReceiptImpl(c)
+}
+
+// HandleProcessReceipt processes a receipt image using Claude (legacy)
 func HandleProcessReceipt(c *gin.Context) {
+	handleProcessReceiptImpl(c)
+}
+
+// handleProcessReceiptImpl implements the receipt processing logic
+func handleProcessReceiptImpl(c *gin.Context) {
 	// 1. Receive the image file
 	file, header, err := c.Request.FormFile("receipt")
 	if err != nil {
@@ -104,8 +114,18 @@ func HandleProcessReceipt(c *gin.Context) {
 	c.JSON(http.StatusOK, processedReceipt)
 }
 
-// AddExpenseFromReceipt creates an expense from a receipt image
+// AddExpenseFromReceiptV1 creates an expense from a receipt image (v1 API)
+func AddExpenseFromReceiptV1(c *gin.Context) {
+	addExpenseFromReceiptImpl(c)
+}
+
+// AddExpenseFromReceipt creates an expense from a receipt image (legacy)
 func AddExpenseFromReceipt(c *gin.Context) {
+	addExpenseFromReceiptImpl(c)
+}
+
+// addExpenseFromReceiptImpl implements the expense from receipt logic
+func addExpenseFromReceiptImpl(c *gin.Context) {
 	// Parse multipart form
 	if err := c.Request.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to parse form: %v", err)})

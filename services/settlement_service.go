@@ -38,9 +38,25 @@ func (s *SettlementService) CalculateSettlements(tripID string) (*models.Settlem
 
 	// Apply payments to balances if payment service is available
 	if s.paymentService != nil {
-		// For now, we'll skip payment integration in settlement calculation
-		// This can be implemented when we have the proper trip code available
-		// TODO: Pass trip code to settlement calculation or modify the flow
+		// Get payments for this trip using trip ID
+		payments, err := s.paymentService.GetPaymentsByTripID(tripID)
+		if err == nil && len(payments) > 0 {
+			// Apply payments to balances
+			for _, payment := range payments {
+				// Initialize balances if they don't exist
+				if _, exists := balances[payment.FromPerson]; !exists {
+					balances[payment.FromPerson] = 0
+				}
+				if _, exists := balances[payment.ToPerson]; !exists {
+					balances[payment.ToPerson] = 0
+				}
+				
+				// The person who paid reduces their debt (becomes less negative or more positive)
+				balances[payment.FromPerson] += payment.Amount
+				// The person who received payment increases their debt (becomes more negative or less positive)
+				balances[payment.ToPerson] -= payment.Amount
+			}
+		}
 	}
 
 	// Calculate settlements

@@ -19,19 +19,15 @@ func NewPaymentRepository(db *sql.DB) *PaymentRepository {
 func (r *PaymentRepository) CreatePayment(payment *models.Payment) error {
 	query := `
 		INSERT INTO payments (trip_id, from_person, to_person, amount, description, payment_date)
-		VALUES (?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id
 	`
-	result, err := r.db.Exec(query, payment.TripID, payment.FromPerson, payment.ToPerson, 
-		payment.Amount, payment.Description, payment.PaymentDate)
+	err := r.db.QueryRow(query, payment.TripID, payment.FromPerson, payment.ToPerson, 
+		payment.Amount, payment.Description, payment.PaymentDate).Scan(&payment.ID)
 	if err != nil {
 		return err
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		return err
-	}
-	payment.ID = int(id)
 	return nil
 }
 
@@ -40,7 +36,7 @@ func (r *PaymentRepository) GetPaymentsByTripID(tripID string) ([]models.Payment
 	query := `
 		SELECT id, trip_id, from_person, to_person, amount, description, payment_date, created_at
 		FROM payments
-		WHERE trip_id = ?
+		WHERE trip_id = $1
 		ORDER BY payment_date DESC
 	`
 	rows, err := r.db.Query(query, tripID)
@@ -65,7 +61,7 @@ func (r *PaymentRepository) GetPaymentsByTripID(tripID string) ([]models.Payment
 
 // DeletePayment deletes a payment by ID
 func (r *PaymentRepository) DeletePayment(paymentID int) error {
-	query := `DELETE FROM payments WHERE id = ?`
+	query := `DELETE FROM payments WHERE id = $1`
 	_, err := r.db.Exec(query, paymentID)
 	return err
 }
@@ -75,7 +71,7 @@ func (r *PaymentRepository) GetPaymentByID(paymentID int) (*models.Payment, erro
 	query := `
 		SELECT id, trip_id, from_person, to_person, amount, description, payment_date, created_at
 		FROM payments
-		WHERE id = ?
+		WHERE id = $1
 	`
 	var payment models.Payment
 	err := r.db.QueryRow(query, paymentID).Scan(

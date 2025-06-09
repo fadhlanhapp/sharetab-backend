@@ -34,6 +34,7 @@ func calculatePersonalCharges(
 			Subtotal:      0,
 			Tax:           0,
 			ServiceCharge: 0,
+			Discount:      0,
 			Total:         0,
 		}
 	}
@@ -55,6 +56,7 @@ func calculatePersonalCharges(
 					Subtotal:      breakdown[consumer].Subtotal + sharePerPerson,
 					Tax:           breakdown[consumer].Tax,
 					ServiceCharge: breakdown[consumer].ServiceCharge,
+					Discount:      breakdown[consumer].Discount,
 					Total:         breakdown[consumer].Total + sharePerPerson,
 				}
 			}
@@ -87,11 +89,12 @@ func calculatePersonalCharges(
 			personService := serviceCharge * proportion
 			personDiscount := totalDiscount * proportion
 
-			// Update breakdown with tax and service
+			// Update breakdown with tax, service, and discount
 			breakdown[person] = models.PersonChargeBreakdown{
 				Subtotal:      breakdown[person].Subtotal,
 				Tax:           utils.Round(personTax),
 				ServiceCharge: utils.Round(personService),
+				Discount:      utils.Round(personDiscount),
 				Total:         utils.Round(breakdown[person].Subtotal + personTax + personService - personDiscount),
 			}
 
@@ -117,6 +120,7 @@ func calculatePersonalCharges(
 				Subtotal:      0,
 				Tax:           utils.Round(personTax),
 				ServiceCharge: utils.Round(personService),
+				Discount:      utils.Round(totalDiscount / float64(len(participants))),
 				Total:         utils.Round(extraPerPerson),
 			}
 
@@ -133,14 +137,15 @@ func calculatePersonalCharges(
 			Subtotal:      utils.Round(breakdown[person].Subtotal),
 			Tax:           utils.Round(breakdown[person].Tax),
 			ServiceCharge: utils.Round(breakdown[person].ServiceCharge),
+			Discount:      utils.Round(breakdown[person].Discount),
 			Total:         utils.Round(breakdown[person].Total),
 		}
 	}
 
 	// Log the breakdown
 	for person, bd := range breakdown {
-		log.Printf("Person %s breakdown: subtotal=%.2f, tax=%.2f, service=%.2f, total=%.2f",
-			person, bd.Subtotal, bd.Tax, bd.ServiceCharge, bd.Total)
+		log.Printf("Person %s breakdown: subtotal=%.2f, tax=%.2f, service=%.2f, discount=%.2f, total=%.2f",
+			person, bd.Subtotal, bd.Tax, bd.ServiceCharge, bd.Discount, bd.Total)
 	}
 
 	return charges, breakdown

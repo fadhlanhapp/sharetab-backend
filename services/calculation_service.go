@@ -146,6 +146,7 @@ func (s *CalculationService) calculatePersonalCharges(
 			Subtotal:      0,
 			Tax:           0,
 			ServiceCharge: 0,
+			Discount:      0,
 			Total:         0,
 		}
 	}
@@ -164,6 +165,7 @@ func (s *CalculationService) calculatePersonalCharges(
 					Subtotal:      breakdown[consumer].Subtotal + sharePerPerson,
 					Tax:           breakdown[consumer].Tax,
 					ServiceCharge: breakdown[consumer].ServiceCharge,
+					Discount:      breakdown[consumer].Discount,
 					Total:         breakdown[consumer].Total + sharePerPerson,
 				}
 			}
@@ -188,6 +190,7 @@ func (s *CalculationService) calculatePersonalCharges(
 				Subtotal:      breakdown[person].Subtotal,
 				Tax:           utils.Round(personTax),
 				ServiceCharge: utils.Round(personService),
+				Discount:      utils.Round(personDiscount),
 				Total:         utils.Round(breakdown[person].Subtotal + personTax + personService - personDiscount),
 			}
 
@@ -207,6 +210,7 @@ func (s *CalculationService) calculatePersonalCharges(
 				Subtotal:      0,
 				Tax:           utils.Round(personTax),
 				ServiceCharge: utils.Round(personService),
+				Discount:      utils.Round(totalDiscount / float64(len(participants))),
 				Total:         utils.Round(extraPerPerson),
 			}
 
@@ -220,6 +224,7 @@ func (s *CalculationService) calculatePersonalCharges(
 			Subtotal:      utils.Round(breakdown[person].Subtotal),
 			Tax:           utils.Round(breakdown[person].Tax),
 			ServiceCharge: utils.Round(breakdown[person].ServiceCharge),
+			Discount:      utils.Round(breakdown[person].Discount),
 			Total:         utils.Round(breakdown[person].Total),
 		}
 	}

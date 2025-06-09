@@ -53,6 +53,7 @@ type PersonChargeBreakdown struct {
 	Subtotal      float64 `json:"subtotal"`
 	Tax           float64 `json:"tax"`
 	ServiceCharge float64 `json:"serviceCharge"`
+	Discount      float64 `json:"discount"`
 	Total         float64 `json:"total"`
 }
 

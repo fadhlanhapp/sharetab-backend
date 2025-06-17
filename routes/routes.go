@@ -39,6 +39,9 @@ func SetupRoutes(router *gin.Engine) {
 		// Receipt processing endpoints
 		v1.POST("/receipts/process", handlers.HandleProcessReceiptV1)
 		v1.POST("/receipts/addExpense", handlers.AddExpenseFromReceiptV1)
+
+		// Export endpoints
+		v1.POST("/trips/exportToExcel", handlers.ExportTripToExcel)
 	}
 
 	// Legacy API routes (for backward compatibility)

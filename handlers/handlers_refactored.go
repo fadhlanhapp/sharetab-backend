@@ -115,7 +115,7 @@ func AddEqualExpenseRefactored(c *gin.Context) {
 	}
 
 	// Get trip to validate and get trip ID
-	trip, err := services.GetTripByCode(request.Code)
+	trip, err := handlerServices.TripService.GetTripByCode(request.Code)
 	if err != nil {
 		utils.HandleError(c, utils.NewNotFoundError("Trip"))
 		return
@@ -133,7 +133,7 @@ func AddEqualExpenseRefactored(c *gin.Context) {
 
 	// Add participants to trip
 	for _, participant := range request.SplitAmong {
-		if err := services.AddParticipant(trip.ID, participant); err != nil {
+		if err := handlerServices.TripService.AddParticipant(trip.ID, participant); err != nil {
 			utils.HandleError(c, utils.NewInternalError("Failed to add participant"))
 			return
 		}
@@ -158,7 +158,7 @@ func AddItemsExpenseRefactored(c *gin.Context) {
 	}
 
 	// Get trip to validate and get trip ID
-	trip, err := services.GetTripByCode(request.Code)
+	trip, err := handlerServices.TripService.GetTripByCode(request.Code)
 	if err != nil {
 		utils.HandleError(c, utils.NewNotFoundError("Trip"))
 		return
@@ -176,12 +176,12 @@ func AddItemsExpenseRefactored(c *gin.Context) {
 
 	// Add participants to trip
 	for _, item := range expense.Items {
-		if err := services.AddParticipant(trip.ID, item.PaidBy); err != nil {
+		if err := handlerServices.TripService.AddParticipant(trip.ID, item.PaidBy); err != nil {
 			utils.HandleError(c, utils.NewInternalError("Failed to add participant"))
 			return
 		}
 		for _, consumer := range item.Consumers {
-			if err := services.AddParticipant(trip.ID, consumer); err != nil {
+			if err := handlerServices.TripService.AddParticipant(trip.ID, consumer); err != nil {
 				utils.HandleError(c, utils.NewInternalError("Failed to add participant"))
 				return
 			}
@@ -207,7 +207,7 @@ func RemoveExpenseRefactored(c *gin.Context) {
 	}
 
 	// Get trip to validate
-	trip, err := services.GetTripByCode(request.Code)
+	trip, err := handlerServices.TripService.GetTripByCode(request.Code)
 	if err != nil {
 		utils.HandleError(c, utils.NewNotFoundError("Trip"))
 		return
@@ -232,7 +232,7 @@ func ListExpensesRefactored(c *gin.Context) {
 	}
 
 	// Get trip to validate
-	trip, err := services.GetTripByCode(request.Code)
+	trip, err := handlerServices.TripService.GetTripByCode(request.Code)
 	if err != nil {
 		utils.HandleError(c, utils.NewNotFoundError("Trip"))
 		return
@@ -258,7 +258,7 @@ func CalculateSettlementsRefactored(c *gin.Context) {
 	}
 
 	// Get trip to validate
-	trip, err := services.GetTripByCode(request.Code)
+	trip, err := handlerServices.TripService.GetTripByCode(request.Code)
 	if err != nil {
 		utils.HandleError(c, utils.NewNotFoundError("Trip"))
 		return

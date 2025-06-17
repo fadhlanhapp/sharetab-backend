@@ -12,7 +12,14 @@ func NormalizeName(name string) string {
 
 // FormatNameForDisplay converts a normalized name to title case for display
 func FormatNameForDisplay(name string) string {
-	return strings.Title(strings.ToLower(strings.TrimSpace(name)))
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	
+	// Convert to lowercase and capitalize first letter
+	name = strings.ToLower(name)
+	return strings.ToUpper(string(name[0])) + name[1:]
 }
 
 // NormalizeNames converts a slice of names to lowercase

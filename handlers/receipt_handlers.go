@@ -21,10 +21,6 @@ func HandleProcessReceiptV1(c *gin.Context) {
 	handleProcessReceiptImpl(c)
 }
 
-// HandleProcessReceipt processes a receipt image using Claude (legacy)
-func HandleProcessReceipt(c *gin.Context) {
-	handleProcessReceiptImpl(c)
-}
 
 // handleProcessReceiptImpl implements the receipt processing logic
 func handleProcessReceiptImpl(c *gin.Context) {
@@ -119,10 +115,6 @@ func AddExpenseFromReceiptV1(c *gin.Context) {
 	addExpenseFromReceiptImpl(c)
 }
 
-// AddExpenseFromReceipt creates an expense from a receipt image (legacy)
-func AddExpenseFromReceipt(c *gin.Context) {
-	addExpenseFromReceiptImpl(c)
-}
 
 // addExpenseFromReceiptImpl implements the expense from receipt logic
 func addExpenseFromReceiptImpl(c *gin.Context) {
@@ -222,8 +214,11 @@ func addExpenseFromReceiptImpl(c *gin.Context) {
 		return
 	}
 
+	// Get services
+	tripService := services.NewTripService()
+	
 	// Get trip by code
-	trip, err := services.GetTripByCode(tripCode)
+	trip, err := tripService.GetTripByCode(tripCode)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		// Clean up the image on error

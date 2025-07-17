@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/fadhlanhapp/sharetab-backend/models"
@@ -24,6 +25,21 @@ func ProcessReceiptWithClaude(imageBytes []byte, format string, filePath string)
 	claudeAPIKey := os.Getenv("ANTHROPIC_API_KEY")
 	if claudeAPIKey == "" {
 		return nil, fmt.Errorf("ANTHROPIC_API_KEY environment variable not set")
+	}
+
+	// Map file extensions to proper MIME types
+	mediaType := ""
+	switch format {
+	case "jpg", "jpeg":
+		mediaType = "image/jpeg"
+	case "png":
+		mediaType = "image/png"
+	case "gif":
+		mediaType = "image/gif"
+	case "webp":
+		mediaType = "image/webp"
+	default:
+		return nil, fmt.Errorf("unsupported image format: %s", format)
 	}
 
 	// Create Claude API request
@@ -66,7 +82,7 @@ Return only valid JSON. No explanations or formatting.`
 						"type": "image",
 						"source": map[string]interface{}{
 							"type":       "base64",
-							"media_type": "image/" + format,
+							"media_type": mediaType,
 							"data":       base64Image,
 						},
 					},
@@ -125,6 +141,19 @@ Return only valid JSON. No explanations or formatting.`
 	if jsonResponse == "" {
 		return nil, fmt.Errorf("no text content found in Claude's response")
 	}
+
+	// Clean up the JSON response by removing markdown code blocks
+	jsonResponse = strings.TrimSpace(jsonResponse)
+	if strings.HasPrefix(jsonResponse, "```json") {
+		jsonResponse = strings.TrimPrefix(jsonResponse, "```json")
+	}
+	if strings.HasPrefix(jsonResponse, "```") {
+		jsonResponse = strings.TrimPrefix(jsonResponse, "```")
+	}
+	if strings.HasSuffix(jsonResponse, "```") {
+		jsonResponse = strings.TrimSuffix(jsonResponse, "```")
+	}
+	jsonResponse = strings.TrimSpace(jsonResponse)
 
 	// Parse the JSON into our structure
 	var processedReceipt models.ProcessedReceipt

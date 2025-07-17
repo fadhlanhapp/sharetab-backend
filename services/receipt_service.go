@@ -120,11 +120,16 @@ Return only valid JSON. No explanations or formatting.`
 			break
 		}
 	}
+	
+	// Check if we found any text content
+	if jsonResponse == "" {
+		return nil, fmt.Errorf("no text content found in Claude's response")
+	}
 
 	// Parse the JSON into our structure
 	var processedReceipt models.ProcessedReceipt
 	if err := json.Unmarshal([]byte(jsonResponse), &processedReceipt); err != nil {
-		return nil, fmt.Errorf("failed to parse Claude's JSON output: %v", err)
+		return nil, fmt.Errorf("failed to parse Claude's JSON output: %v. Raw response: %s", err, jsonResponse)
 	}
 
 	// Add the image path to the response

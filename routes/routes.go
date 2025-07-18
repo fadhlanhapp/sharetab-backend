@@ -44,4 +44,12 @@ func SetupRoutes(router *gin.Engine) {
 		v1.POST("/trips/exportToExcel", handlers.ExportTripToExcel)
 	}
 
+	// Health check endpoint
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "healthy",
+			"service": "sharetab-api",
+			"timestamp": gin.Context.Writer.Header().Get("Date"),
+		})
+	})
 }

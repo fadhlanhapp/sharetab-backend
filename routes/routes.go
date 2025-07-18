@@ -49,7 +49,6 @@ func SetupRoutes(router *gin.Engine) {
 		c.JSON(200, gin.H{
 			"status": "healthy",
 			"service": "sharetab-api",
-			"timestamp": gin.Context.Writer.Header().Get("Date"),
 		})
 	})
 }

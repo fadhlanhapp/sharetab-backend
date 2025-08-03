@@ -68,7 +68,7 @@ Return only valid JSON. No explanations or formatting.`
 
 	// Construct Claude API request body
 	requestBody := map[string]interface{}{
-		"model":      "claude-sonnet-4-20250514",
+		"model":      "claude-3-5-sonnet-20241022",
 		"max_tokens": 4000,
 		"messages": []map[string]interface{}{
 			{

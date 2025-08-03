@@ -45,15 +45,21 @@ func ProcessReceiptWithClaude(imageBytes []byte, format string, filePath string)
 	// Create Claude API request
 	claudeURL := "https://api.anthropic.com/v1/messages"
 
-	// Detailed prompt for consistent JSON extraction
+	// Optimized prompt for receipt extraction
 	prompt := `Extract receipt data in this JSON format:
+
+Note: Some receipts show quantity on separate lines:
+- "3 @ 36.000" (quantity @ unit_price)
+- "Item Name" (on next line)
+Match quantity lines with item names below them. Use unit_price, not total.
+
 {
   "merchant": "store name",
   "date": "YYYY-MM-DD",
   "items": [
     {
       "name": "item name",
-      "price": number,
+      "price": unit_price_per_item,
       "quantity": number,
       "discount": number
     }
@@ -64,7 +70,8 @@ func ProcessReceiptWithClaude(imageBytes []byte, format string, filePath string)
   "discount": number,
   "total": number
 }
-Return only valid JSON. No explanations or formatting.`
+
+Return only valid JSON. No explanations.`
 
 	// Construct Claude API request body
 	requestBody := map[string]interface{}{

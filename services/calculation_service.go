@@ -161,12 +161,13 @@ func (s *CalculationService) calculatePersonalCharges(
 			sharePerPerson = utils.Round(sharePerPerson)
 
 			for _, consumer := range item.Consumers {
+				currentBreakdown := breakdown[consumer]
 				breakdown[consumer] = models.PersonChargeBreakdown{
-					Subtotal:      breakdown[consumer].Subtotal + sharePerPerson,
-					Tax:           breakdown[consumer].Tax,
-					ServiceCharge: breakdown[consumer].ServiceCharge,
-					Discount:      breakdown[consumer].Discount,
-					Total:         breakdown[consumer].Total + sharePerPerson,
+					Subtotal:      currentBreakdown.Subtotal + sharePerPerson,
+					Tax:           currentBreakdown.Tax,
+					ServiceCharge: currentBreakdown.ServiceCharge,
+					Discount:      currentBreakdown.Discount,
+					Total:         currentBreakdown.Total, // Total will be calculated after all extras are added
 				}
 			}
 		}

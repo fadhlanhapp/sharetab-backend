@@ -9,6 +9,8 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/newrelic/go-agent/v3/newrelic"
+	"github.com/newrelic/go-agent/v3/integrations/nrgin"
 
 	"github.com/fadhlanhapp/sharetab-backend/repository"
 	"github.com/fadhlanhapp/sharetab-backend/routes"
@@ -19,6 +21,16 @@ func main() {
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
 		log.Println("Warning: .env file not found, using environment variables")
+	}
+
+	// Initialize New Relic
+	app, err := newrelic.NewApplication(
+		newrelic.ConfigAppName("ShareTab API"),
+		newrelic.ConfigLicense(os.Getenv("NEW_RELIC_LICENSE_KEY")),
+		newrelic.ConfigDistributedTracerEnabled(true),
+	)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize New Relic: %v", err)
 	}
 
 	// Initialize database
@@ -38,6 +50,11 @@ func main() {
 
 	// Set up Gin router
 	router := gin.Default()
+
+	// Add New Relic middleware
+	if app != nil {
+		router.Use(nrgin.Middleware(app))
+	}
 
 	// Configure CORS
 	router.Use(cors.New(cors.Config{

@@ -82,9 +82,31 @@ func handleProcessReceiptImpl(c *gin.Context) {
 	processedReceipt, err := services.ProcessReceiptWithClaude(fileBytes, ext[1:], filePath)
 	if err != nil {
 		log.Printf("Error processing receipt with Claude: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("Failed to process receipt: %v", err),
+		
+		// Parse error type for better user messaging
+		errorMsg := err.Error()
+		statusCode := http.StatusInternalServerError
+		userFriendlyMsg := "Failed to process receipt"
+		
+		if strings.HasPrefix(errorMsg, "receipt_processing_failed:") {
+			userFriendlyMsg = "Unable to read the receipt. Please ensure the image is clear and shows a complete receipt."
+			statusCode = http.StatusBadRequest
+		} else if strings.HasPrefix(errorMsg, "invalid_receipt:") {
+			userFriendlyMsg = "The uploaded image does not appear to be a valid receipt. Please upload a photo of a receipt."
+			statusCode = http.StatusBadRequest
+		} else if strings.HasPrefix(errorMsg, "receipt_format_error:") {
+			userFriendlyMsg = "Cannot read the receipt format. Please ensure the image is clear and not blurry."
+			statusCode = http.StatusBadRequest
+		} else if strings.HasPrefix(errorMsg, "invalid_receipt_data:") {
+			userFriendlyMsg = "No items or amounts found in the receipt. Please ensure the entire receipt is visible."
+			statusCode = http.StatusBadRequest
+		}
+		
+		c.JSON(statusCode, gin.H{
+			"error": userFriendlyMsg,
+			"details": errorMsg, // Include full error for debugging
 		})
+		
 		// Clean up the image even on error
 		if err := os.Remove(filePath); err != nil {
 			log.Printf("Failed to delete image file after error: %v", err)
@@ -208,7 +230,32 @@ func addExpenseFromReceiptImpl(c *gin.Context) {
 	// Process the image using Claude API
 	processedReceipt, err := services.ProcessReceiptWithClaude(fileBytes, ext[1:], filePath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to process receipt: %v", err)})
+		log.Printf("Error processing receipt with Claude: %v", err)
+		
+		// Parse error type for better user messaging
+		errorMsg := err.Error()
+		statusCode := http.StatusInternalServerError
+		userFriendlyMsg := "Failed to process receipt"
+		
+		if strings.HasPrefix(errorMsg, "receipt_processing_failed:") {
+			userFriendlyMsg = "Unable to read the receipt. Please ensure the image is clear and shows a complete receipt."
+			statusCode = http.StatusBadRequest
+		} else if strings.HasPrefix(errorMsg, "invalid_receipt:") {
+			userFriendlyMsg = "The uploaded image does not appear to be a valid receipt. Please upload a photo of a receipt."
+			statusCode = http.StatusBadRequest
+		} else if strings.HasPrefix(errorMsg, "receipt_format_error:") {
+			userFriendlyMsg = "Cannot read the receipt format. Please ensure the image is clear and not blurry."
+			statusCode = http.StatusBadRequest
+		} else if strings.HasPrefix(errorMsg, "invalid_receipt_data:") {
+			userFriendlyMsg = "No items or amounts found in the receipt. Please ensure the entire receipt is visible."
+			statusCode = http.StatusBadRequest
+		}
+		
+		c.JSON(statusCode, gin.H{
+			"error": userFriendlyMsg,
+			"details": errorMsg, // Include full error for debugging
+		})
+		
 		// Clean up the image on error
 		os.Remove(filePath)
 		return

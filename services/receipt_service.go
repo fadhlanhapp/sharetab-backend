@@ -146,7 +146,7 @@ Return only valid JSON. No explanations.`
 	
 	// Check if we found any text content
 	if jsonResponse == "" {
-		return nil, fmt.Errorf("no text content found in Claude's response")
+		return nil, fmt.Errorf("receipt_processing_failed: no content returned from Claude - the image may not be a receipt or could not be read")
 	}
 
 	// Clean up the JSON response by removing markdown code blocks
@@ -162,10 +162,28 @@ Return only valid JSON. No explanations.`
 	}
 	jsonResponse = strings.TrimSpace(jsonResponse)
 
+	// Check if response is empty after cleanup
+	if jsonResponse == "" {
+		return nil, fmt.Errorf("receipt_processing_failed: empty response after processing - the image may not be a valid receipt")
+	}
+
 	// Parse the JSON into our structure
 	var processedReceipt models.ProcessedReceipt
 	if err := json.Unmarshal([]byte(jsonResponse), &processedReceipt); err != nil {
-		return nil, fmt.Errorf("failed to parse Claude's JSON output: %v. Raw response: %s", err, jsonResponse)
+		// Check if the response indicates it's not a receipt
+		lowerResponse := strings.ToLower(jsonResponse)
+		if strings.Contains(lowerResponse, "not a receipt") || 
+		   strings.Contains(lowerResponse, "unable to process") ||
+		   strings.Contains(lowerResponse, "cannot extract") ||
+		   strings.Contains(lowerResponse, "not readable") {
+			return nil, fmt.Errorf("invalid_receipt: the uploaded image does not appear to be a valid receipt or cannot be read clearly")
+		}
+		return nil, fmt.Errorf("receipt_format_error: unable to parse receipt data - the image may be unclear or not a standard receipt format")
+	}
+	
+	// Validate that we have essential receipt data
+	if processedReceipt.Total == 0 && len(processedReceipt.Items) == 0 {
+		return nil, fmt.Errorf("invalid_receipt_data: no items or total amount found - please ensure the receipt is clear and complete")
 	}
 
 	// Add the image path to the response
